@@ -13,7 +13,7 @@
  * - RF18 / RN03 / RN04 / HU13: Anexo Imagens (máximo 3 arquivos, formatos JPG/PNG, tamanho máx. 5 MB por imagem)
  * - RN03 / HU12 / HU13: Limite consolidado de todos os anexos somados não pode exceder 20 MB
  * - RF19 / RN05 / HU14: Link externo com formato URL válido iniciando estritamente com http:// ou https://
- * - RF20 / RNF12 / HU10: Validação de preenchimento completo com feedback claro sem termos técnicos
+ * - RF20 / RNF12 / HU10: Validação de preenchimento completo com mensagens simples e sem termos técnicos
  * 
  * Autor: Assis Barroso (Fase 6 - Implementação)
  */
@@ -32,7 +32,7 @@ function inicializarValidacaoCadastro() {
             evento.preventDefault();
             exibirErrosFormulario(formCadastro, erros);
         } else {
-            // Se estiver em ambiente mock de teste (sem action de backend definida), simula sucesso
+            // Se estiver em ambiente mock de teste (sem action de backend definida), simula a confirmação
             if (!formCadastro.getAttribute('action')) {
                 evento.preventDefault();
                 exibirSucessoFormulario(formCadastro);
@@ -45,7 +45,6 @@ function inicializarValidacaoCadastro() {
     configurarValidacaoTempoReal(formCadastro);
 }
 
-// Inicializa com segurança caso o script seja carregado antes ou depois do DOM
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', inicializarValidacaoCadastro);
 } else {
@@ -53,42 +52,41 @@ if (document.readyState === 'loading') {
 }
 
 /**
- * Validação completa em conformidade com as regras de negócio e requisitos
+ * Validação completa em conformidade com as regras de negócio
  * @param {HTMLFormElement} form
  * @returns {Array<{campo: string, mensagem: string}>}
  */
 function validarFormularioQuestao(form) {
     const erros = [];
 
-    // RF11: Assunto obrigatório
+    // Assunto obrigatório
     const assunto = form.querySelector('[name="assunto"]');
     if (!assunto || !assunto.value.trim()) {
-        erros.push({ campo: 'assunto', mensagem: 'O campo Assunto é obrigatório.' });
+        erros.push({ campo: 'assunto', mensagem: 'Por favor, informe o assunto da questão.' });
     } else if (assunto.value.trim().length < 3) {
         erros.push({ campo: 'assunto', mensagem: 'O assunto deve ter pelo menos 3 caracteres.' });
     }
 
-    // RF15 / RN08: Categoria/Disciplina obrigatória
+    // Categoria/Disciplina obrigatória
     const categoria = form.querySelector('[name="categoria"]');
     if (!categoria || !categoria.value.trim()) {
-        erros.push({ campo: 'categoria', mensagem: 'Selecione uma Categoria ou Disciplina para a questão.' });
+        erros.push({ campo: 'categoria', mensagem: 'Selecione uma disciplina ou categoria para a questão.' });
     }
 
-    // RF12: Enunciado obrigatório (limites de 10 a 5.000 caracteres conforme Fase 2)
+    // Enunciado obrigatório (10 a 5.000 caracteres)
     const enunciado = form.querySelector('[name="enunciado"]');
     if (!enunciado || !enunciado.value.trim()) {
-        erros.push({ campo: 'enunciado', mensagem: 'O campo Enunciado é obrigatório.' });
+        erros.push({ campo: 'enunciado', mensagem: 'Por favor, digite o enunciado da questão.' });
     } else {
         const tamEnunciado = enunciado.value.trim().length;
         if (tamEnunciado < 10) {
             erros.push({ campo: 'enunciado', mensagem: 'O enunciado deve ter no mínimo 10 caracteres.' });
         } else if (tamEnunciado > 5000) {
-            erros.push({ campo: 'enunciado', mensagem: 'O enunciado não pode ultrapassar o limite de 5.000 caracteres.' });
+            erros.push({ campo: 'enunciado', mensagem: 'O enunciado ultrapassou o tamanho máximo permitido de 5.000 caracteres.' });
         }
     }
 
-    // RF14 / Fase 2: Cadastrar de 2 a 5 alternativas
-    // Alternativas A e B são obrigatórias (mínimo de 2 para múltipla escolha ou V/F)
+    // Alternativas da questão (mínimo 2 preenchidas: A e B)
     const altA = form.querySelector('[name="alternativa_a"]');
     const altB = form.querySelector('[name="alternativa_b"]');
 
@@ -96,10 +94,10 @@ function validarFormularioQuestao(form) {
         erros.push({ campo: 'alternativa_a', mensagem: 'A alternativa (A) é obrigatória.' });
     }
     if (!altB || !altB.value.trim()) {
-        erros.push({ campo: 'alternativa_b', mensagem: 'A alternativa (B) é obrigatória (mínimo de 2 alternativas).' });
+        erros.push({ campo: 'alternativa_b', mensagem: 'A alternativa (B) é obrigatória (a questão precisa ter pelo menos duas alternativas).' });
     }
 
-    // Coleta quais letras foram preenchidas pelo usuário
+    // Mapeamento de alternativas preenchidas
     const letrasPreenchidas = [];
     ['a', 'b', 'c', 'd', 'e'].forEach((letra) => {
         const campoAlt = form.querySelector(`[name="alternativa_${letra}"]`);
@@ -108,7 +106,7 @@ function validarFormularioQuestao(form) {
         }
     });
 
-    // RF14: Resposta Correta (gabarito) obrigatória e consistente
+    // Resposta correta (gabarito)
     const respostaCorreta = form.querySelector('[name="resposta_correta"]');
     if (!respostaCorreta || !respostaCorreta.value.trim()) {
         erros.push({ campo: 'resposta_correta', mensagem: 'Selecione qual alternativa é a resposta correta.' });
@@ -117,47 +115,45 @@ function validarFormularioQuestao(form) {
         if (letrasPreenchidas.length > 0 && !letrasPreenchidas.includes(letraGabarito)) {
             erros.push({
                 campo: 'resposta_correta',
-                mensagem: `A resposta correta selecionada (${letraGabarito}) não foi preenchida nas alternativas. Escolha entre: ${letrasPreenchidas.join(', ')}.`
+                mensagem: `Você selecionou a alternativa (${letraGabarito}) como correta, mas ela não foi preenchida. Escolha uma das preenchidas: ${letrasPreenchidas.join(', ')}.`
             });
         }
     }
 
-    // RF13: Explicação do gabarito obrigatória
+    // Explicação obrigatória
     const explicacao = form.querySelector('[name="explicacao"]');
     if (!explicacao || !explicacao.value.trim()) {
-        erros.push({ campo: 'explicacao', mensagem: 'O campo Explicação do Gabarito é obrigatório.' });
+        erros.push({ campo: 'explicacao', mensagem: 'Por favor, escreva uma breve explicação sobre a resposta correta.' });
     }
 
-    // RN03 / RN04 / RF17 / RF18 / HU12 / HU13: Validação de arquivos e tamanho total consolidado (20 MB)
+    // Anexos e arquivos (PDF até 10 MB, até 3 fotos de 5 MB, total até 20 MB)
     let tamanhoTotalAnexos = 0;
     const limiteConsolidado = 20 * 1024 * 1024; // 20 MB
 
-    // RF17: Validação do anexo PDF (máx. 1 arquivo, formato .pdf, máx. 10 MB)
     const inputPdf = form.querySelector('[name="anexo_pdf"]');
     if (inputPdf && inputPdf.files && inputPdf.files.length > 0) {
         if (inputPdf.files.length > 1) {
-            erros.push({ campo: 'anexo_pdf', mensagem: 'É permitido anexar no máximo 1 arquivo PDF.' });
+            erros.push({ campo: 'anexo_pdf', mensagem: 'É permitido anexar apenas 1 documento PDF.' });
         } else {
             const arquivoPdf = inputPdf.files[0];
             const limiteMaximoPdf = 10 * 1024 * 1024; // 10 MB
             tamanhoTotalAnexos += arquivoPdf.size;
 
             if (!arquivoPdf.name.toLowerCase().endsWith('.pdf') && arquivoPdf.type !== 'application/pdf') {
-                erros.push({ campo: 'anexo_pdf', mensagem: 'O arquivo anexado deve ser obrigatoriamente no formato PDF.' });
+                erros.push({ campo: 'anexo_pdf', mensagem: 'O arquivo anexado precisa ser um documento em formato PDF.' });
             } else if (arquivoPdf.size > limiteMaximoPdf) {
-                erros.push({ campo: 'anexo_pdf', mensagem: 'O arquivo PDF não pode ultrapassar o limite de 10 MB.' });
+                erros.push({ campo: 'anexo_pdf', mensagem: 'O documento PDF é muito grande. O limite máximo é de 10 MB.' });
             }
         }
     }
 
-    // RF18: Validação de imagens anexadas (JPG/PNG, máx. 5 MB cada, máx. 3 imagens)
     const inputImagens = form.querySelector('[name="anexo_imagens"]');
     if (inputImagens && inputImagens.files && inputImagens.files.length > 0) {
         const limiteMaximoImg = 5 * 1024 * 1024; // 5 MB
         const formatosPermitidos = ['image/jpeg', 'image/png', 'image/jpg'];
 
         if (inputImagens.files.length > 3) {
-            erros.push({ campo: 'anexo_imagens', mensagem: 'É permitido anexar no máximo 3 imagens por questão.' });
+            erros.push({ campo: 'anexo_imagens', mensagem: 'Você pode enviar no máximo 3 imagens de apoio.' });
         }
 
         Array.from(inputImagens.files).forEach((img) => {
@@ -166,26 +162,25 @@ function validarFormularioQuestao(form) {
             if (!formatosPermitidos.includes(img.type) && !extValida) {
                 erros.push({ campo: 'anexo_imagens', mensagem: `A imagem "${img.name}" deve estar no formato JPG ou PNG.` });
             } else if (img.size > limiteMaximoImg) {
-                erros.push({ campo: 'anexo_imagens', mensagem: `A imagem "${img.name}" excede o tamanho máximo de 5 MB.` });
+                erros.push({ campo: 'anexo_imagens', mensagem: `A imagem "${img.name}" é muito pesada. O limite por imagem é de 5 MB.` });
             }
         });
     }
 
-    // RN03: Limite consolidado de todos os anexos não pode ultrapassar 20 MB
     if (tamanhoTotalAnexos > limiteConsolidado) {
         erros.push({
             campo: 'anexo_pdf',
-            mensagem: 'O tamanho total consolidado de todos os arquivos anexados (PDF + imagens) não pode ultrapassar 20 MB.'
+            mensagem: 'O tamanho somado de todos os seus anexos passou de 20 MB. Reduza o tamanho dos arquivos para continuar.'
         });
     }
 
-    // RF19 / RN05: Link externo validado (estritamente http:// ou https://)
+    // Link externo
     const linkExterno = form.querySelector('[name="link_externo"]');
     if (linkExterno && linkExterno.value.trim()) {
         const urlValor = linkExterno.value.trim();
         const urlRegex = /^https?:\/\/[a-zA-Z0-9\-\.]+(\.[a-zA-Z]{2,})+(:\d+)?(\/.*)?$/;
         if (!urlRegex.test(urlValor)) {
-            erros.push({ campo: 'link_externo', mensagem: 'O link externo deve ser uma URL válida iniciando com http:// ou https://' });
+            erros.push({ campo: 'link_externo', mensagem: 'O endereço web informado é inválido. Ele deve começar com http:// ou https://' });
         }
     }
 
@@ -193,13 +188,11 @@ function validarFormularioQuestao(form) {
 }
 
 /**
- * Exibe os erros de forma clara ao lado de cada campo (RF20 / RNF12)
- * Garante que a mensagem de sucesso seja ocultada imediatamente
+ * Exibe erros contextuais ao lado dos campos (RNF12)
  */
 function exibirErrosFormulario(form, erros) {
     limparErrosFormulario(form);
 
-    // Oculta mensagem de sucesso se estava visível
     const resumoSucesso = form.parentNode.querySelector('#resumo-sucesso') || document.getElementById('resumo-sucesso');
     if (resumoSucesso) {
         resumoSucesso.style.display = 'none';
@@ -207,7 +200,7 @@ function exibirErrosFormulario(form, erros) {
 
     const resumoErro = form.parentNode.querySelector('#resumo-erros') || document.getElementById('resumo-erros');
     if (resumoErro) {
-        resumoErro.textContent = `Atenção: existem ${erros.length} pendência(s) no formulário que impedem a publicação da questão.`;
+        resumoErro.textContent = `Atenção: verifique os ${erros.length} campo(s) destacados abaixo para publicar a questão.`;
         resumoErro.style.display = 'block';
     }
 
@@ -238,7 +231,7 @@ function exibirErrosFormulario(form, erros) {
 }
 
 /**
- * Exibe mensagem de sucesso quando tudo for válido
+ * Exibe mensagem de confirmação amigável
  */
 function exibirSucessoFormulario(form) {
     limparErrosFormulario(form);
@@ -246,13 +239,13 @@ function exibirSucessoFormulario(form) {
     const resumoSucesso = form.parentNode.querySelector('#resumo-sucesso') || document.getElementById('resumo-sucesso');
     if (resumoSucesso) {
         resumoSucesso.style.display = 'block';
-        resumoSucesso.innerHTML = '<strong>Validação Aprovada com Sucesso!</strong> A questão atende a todos os critérios (RF11 a RF20, RN03 a RN08) e está pronta para persistência no banco de dados.';
+        resumoSucesso.innerHTML = '<strong>Questão cadastrada com sucesso!</strong> A sua questão foi validada e já está pronta para o Banco de Questões da UNILAB.';
         resumoSucesso.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
 /**
- * Remove erros anteriores
+ * Limpa erros ao reenviar
  */
 function limparErrosFormulario(form) {
     const resumoErro = form.parentNode.querySelector('#resumo-erros') || document.getElementById('resumo-erros');
@@ -272,7 +265,7 @@ function limparErrosFormulario(form) {
 }
 
 /**
- * Limpa o erro do campo dinamicamente conforme o usuário altera seu valor
+ * Limpa erro do campo dinamicamente conforme o usuário digita
  */
 function configurarValidacaoTempoReal(form) {
     form.querySelectorAll('input, textarea, select').forEach((campo) => {
