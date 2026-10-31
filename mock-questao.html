@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulação de Questão - Teste de JS</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 650px; margin: 40px auto; padding: 20px; line-height: 1.5; }
+    .card-questao { border: 1px solid #ddd; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .alternativa { display: block; margin: 10px 0; padding: 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+    .alternativa:hover { background-color: #f7f7f7; }
+    .alternativa.selecionada { border-color: #0073aa; background-color: #eef6fa; font-weight: bold; }
+    .alternativa.correta { border-color: #28a745 !important; background-color: #d4edda !important; color: #155724; }
+    .alternativa.incorreta { border-color: #dc3545 !important; background-color: #f8d7da !important; color: #721c24; }
+    .btn-responder { background-color: #0073aa; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 15px; }
+    .feedback-box { margin-top: 20px; padding: 15px; border-radius: 6px; display: none; }
+    .feedback-box.visivel { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- data-gabarito define qual é a correta para o teste -->
+  <div class="card-questao" data-gabarito="C">
+    <h3>Questão 01 - Engenharia de Software</h3>
+    <p>Qual das seguintes alternativas representa um princípio ágil?</p>
+
+    <div class="lista-alternativas">
+      <div class="alternativa" data-letra="A">A) Processos e ferramentas mais que indivíduos e interações.</div>
+      <div class="alternativa" data-letra="B">B) Documentação abrangente mais que software em funcionamento.</div>
+      <div class="alternativa" data-letra="C">C) Responder a mudanças mais que seguir um plano.</div>
+      <div class="alternativa" data-letra="D">D) Negociação de contratos mais que colaboração com o cliente.</div>
+      <div class="alternativa" data-letra="E">E) Nenhuma das anteriores.</div>
+    </div>
+
+    <button id="btn-responder" class="btn-responder">Responder</button>
+
+    <div id="feedback-box" class="feedback-box">
+      <h4 id="feedback-titulo"></h4>
+      <p id="feedback-explicacao">Explicação: O manifesto ágil valoriza responder a mudanças mais que seguir um plano.</p>
+    </div>
+  </div>
+
+  <!-- Script que o Assis vai programar -->
+  <script src="assets/js/resolucao-questoes.js"></script>
+</body>
+</html>
