@@ -1,0 +1,138 @@
+[
+  {
+    "id": 1,
+    "assunto": "Princípios do Manifesto Ágil",
+    "categoria": "Engenharia de Software",
+    "enunciado": "O Manifesto para o Desenvolvimento Ágil de Software valoriza determinados itens em detrimento de outros. Qual das alternativas a seguir expressa corretamente um dos seus quatro valores fundamentais?",
+    "alternativas": {
+      "A": "Processos e ferramentas mais que indivíduos e interações.",
+      "B": "Documentação abrangente mais que software em funcionamento.",
+      "C": "Responder a mudanças mais que seguir um plano.",
+      "D": "Negociação de contratos mais que colaboração com o cliente.",
+      "E": "Seguir rigorosamente o cronograma inicial mais que adaptar o escopo."
+    },
+    "resposta_correta": "C",
+    "explicacao": "O Manifesto Ágil afirma explicitamente: 'Responder a mudanças mais que seguir um plano'. Embora haja valor nos itens à direita, valoriza-se mais os itens à esquerda.",
+    "tags": ["Metodologias Ágeis", "Scrum", "Manifesto Ágil"],
+    "link_externo": "https://agilemanifesto.org/iso/ptbr/manifesto.html"
+  },
+  {
+    "id": 2,
+    "assunto": "Diagrama de Classes UML - Multiplicidade e Relacionamentos",
+    "categoria": "Engenharia de Software",
+    "enunciado": "Em um diagrama de classes da UML, uma relação de Composição difere fundamentalmente de uma relação de Agregação porque:",
+    "alternativas": {
+      "A": "A agregação implica dependência do ciclo de vida, onde a destruição do todo destrói a parte.",
+      "B": "A composição denota posse forte e dependência de existência: a parte não pode existir sem o todo.",
+      "C": "A agregação só pode ocorrer entre classes abstratas e interfaces.",
+      "D": "A composição é representada por um losango branco e a agregação por um losango preto.",
+      "E": "Ambas as relações são sinônimas na especificação formal da UML 2.5."
+    },
+    "resposta_correta": "B",
+    "explicacao": "Na composição (losango preto preenchido), a parte pertence exclusivamente ao objeto todo e sua existência cessa caso o objeto todo seja destruído.",
+    "tags": ["UML", "Diagrama de Classes", "POO"],
+    "link_externo": "https://www.uml.org"
+  },
+  {
+    "id": 3,
+    "assunto": "Complexidade Assintótica de Algoritmos",
+    "categoria": "Algoritmos e Estruturas de Dados",
+    "enunciado": "Considere o algoritmo de ordenação QuickSort em sua implementação clássica utilizando o último elemento como pivô. No pior caso (array já ordenado), qual é a sua complexidade de tempo assintótica?",
+    "alternativas": {
+      "A": "O(n log n)",
+      "B": "O(log n)",
+      "C": "O(n)",
+      "D": "O(n²)",
+      "E": "O(2ⁿ)"
+    },
+    "resposta_correta": "D",
+    "explicacao": "Quando o vetor já está ordenado e escolhe-se o extremo como pivô, as partições ficam desbalanceadas (tamanho n-1 e 0), gerando uma árvore de recursão com profundidade n e custo total quadrático O(n²).",
+    "tags": ["Complexidade", "QuickSort", "Big-O"],
+    "link_externo": ""
+  },
+  {
+    "id": 4,
+    "assunto": "Estruturas de Dados Lineares - Filas e Pilhas",
+    "categoria": "Algoritmos e Estruturas de Dados",
+    "enunciado": "Qual estrutura de dados opera sob o princípio LIFO (Last-In, First-Out) e é amplamente utilizada para implementar chamadas de funções recursivas e avaliação de expressões aritméticas pós-fixadas?",
+    "alternativas": {
+      "A": "Fila (Queue)",
+      "B": "Pilha (Stack)",
+      "C": "Lista Encadeada Circular",
+      "D": "Árvore Binária de Busca",
+      "E": "Tabela Hash"
+    },
+    "resposta_correta": "B",
+    "explicacao": "A Pilha (Stack) opera sob o mecanismo LIFO, onde o último elemento inserido (push) é obrigatoriamente o primeiro a ser retirado (pop).",
+    "tags": ["Pilha", "Estruturas de Dados", "Recursão"],
+    "link_externo": ""
+  },
+  {
+    "id": 5,
+    "assunto": "Cálculo Diferencial - Regra da Cadeia",
+    "categoria": "Cálculo Diferencial e Integral",
+    "enunciado": "Dada a função f(x) = sen(3x² + 5), qual é a sua derivada f'(x) em relação a x obtida pela aplicação da Regra da Cadeia?",
+    "alternativas": {
+      "A": "f'(x) = cos(3x² + 5)",
+      "B": "f'(x) = 6x · cos(3x² + 5)",
+      "C": "f'(x) = -6x · cos(3x² + 5)",
+      "D": "f'(x) = 3x · sen(3x² + 5)",
+      "E": "f'(x) = 6x · sen(3x² + 5)"
+    },
+    "resposta_correta": "B",
+    "explicacao": "Pela Regra da Cadeia, se f(x) = g(h(x)), então f'(x) = g'(h(x)) · h'(x). Sendo g(u) = sen(u) com g'(u) = cos(u) e h(x) = 3x² + 5 com h'(x) = 6x, temos f'(x) = cos(3x² + 5) · 6x.",
+    "tags": ["Derivadas", "Regra da Cadeia", "Cálculo 1"],
+    "link_externo": ""
+  },
+  {
+    "id": 6,
+    "assunto": "História e Cooperação na Lusofonia",
+    "categoria": "Humanidades e Lusofonia",
+    "enunciado": "A Comunidade dos Países de Língua Portuguesa (CPLP), da qual o Brasil e os países parceiros da UNILAB fazem parte, foi formalmente fundada em que ano e com qual objetivo prioritário?",
+    "alternativas": {
+      "A": "Fundada em 1996, com foco na concertação político-diplomática e cooperação multilateral em áreas como educação e saúde.",
+      "B": "Fundada em 1945, com objetivo de criar um bloco econômico de livre comércio aduaneiro obrigatório.",
+      "C": "Fundada em 2010, visando unificar as moedas de todos os países lusófonos.",
+      "D": "Fundada em 1989, exclusivamente para a organização dos Jogos Olímpicos da Lusofonia.",
+      "E": "Fundada em 2002, como um tratado militar de defesa mútua no Atlântico Sul."
+    },
+    "resposta_correta": "A",
+    "explicacao": "A CPLP foi criada em 17 de julho de 1996 em Lisboa, tendo como pilares a concertação político-diplomática, a cooperação cidadã (educação, cultura, saúde) e a difusão da língua portuguesa.",
+    "tags": ["UNILAB", "CPLP", "Lusofonia", "Relações Internacionais"],
+    "link_externo": "https://www.cplp.org"
+  },
+  {
+    "id": 7,
+    "assunto": "Engenharia de Requisitos - MoSCoW",
+    "categoria": "Engenharia de Software",
+    "enunciado": "Na técnica de priorização de requisitos MoSCoW utilizada na Engenharia de Software, os requisitos classificados na categoria 'Must Have' representam:",
+    "alternativas": {
+      "A": "Funcionalidades desejáveis que podem ser deixadas de fora sem impacto no lançamento inicial.",
+      "B": "Requisitos obrigatórios e inegociáveis, sem os quais a solução não pode ser considerada entregue nem colocada em produção.",
+      "C": "Melhorias de desempenho que só devem ser implementadas se sobrar tempo e orçamento na sprint.",
+      "D": "Requisitos fora de escopo acordados formalmente para não serem desenvolvidos.",
+      "E": "Funcionalidades opcionais solicitadas apenas por usuários secundários."
+    },
+    "resposta_correta": "B",
+    "explicacao": "O 'M' de MoSCoW significa 'Must Have' (Deve ter). Representa o núcleo crítico do sistema; se um único item Must Have faltar, a entrega é considerada não finalizada.",
+    "tags": ["MoSCoW", "Requisitos", "Engenharia de Software"],
+    "link_externo": ""
+  },
+  {
+    "id": 8,
+    "assunto": "Redes de Computadores - Camada de Transporte",
+    "categoria": "Redes de Computadores",
+    "enunciado": "Qual é a principal distinção operacional entre os protocolos de transporte TCP (Transmission Control Protocol) e UDP (User Datagram Protocol)?",
+    "alternativas": {
+      "A": "O UDP é orientado a conexão com controle de fluxo, enquanto o TCP não garante entrega ordenada.",
+      "B": "O TCP realiza handshake em três vias (three-way handshake) e garante entrega confiável e ordenada, enquanto o UDP prioriza baixa latência sem garantia de entrega.",
+      "C": "O TCP opera exclusivamente em redes sem fio, enquanto o UDP opera em fibra óptica.",
+      "D": "O UDP criptografa automaticamente todo o tráfego, enquanto o TCP trafega dados em texto plano.",
+      "E": "O TCP utiliza portas de 0 a 1023 e o UDP utiliza portas acima de 49152."
+    },
+    "resposta_correta": "B",
+    "explicacao": "O TCP é orientado a conexão com garantia de entrega, retransmissão e controle de congestionamento. O UDP é não-orientado a conexão (connectionless), ideal para streaming e jogos onde velocidade supera a confiabilidade estrita.",
+    "tags": ["TCP/IP", "Redes", "Protocolos"],
+    "link_externo": ""
+  }
+]

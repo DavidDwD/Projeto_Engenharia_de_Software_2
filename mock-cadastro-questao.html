@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulação de Publicação de Questão (RF10 a RF20)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 720px;
+      margin: 30px auto;
+      padding: 20px;
+      line-height: 1.5;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    .form-container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    h2 { margin-top: 0; color: #0073aa; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    .campo-grupo { margin-bottom: 18px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
+    .obrigatorio { color: #dc3545; }
+    input[type="text"], input[type="url"], select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    .grupo-alternativas {
+      background: #fdfdfd;
+      border: 1px solid #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 18px;
+    }
+    .item-alternativa { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .letra-badge {
+      font-weight: bold;
+      background: #eef6fa;
+      color: #0073aa;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid #cce5ff;
+    }
+    .btn-publicar {
+      background-color: #0073aa;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-publicar:hover { background-color: #005177; }
+    .resumo-erros {
+      display: none;
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 12px;
+      border: 1px solid #f5c6cb;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .resumo-sucesso {
+      display: none;
+      background-color: #d4edda;
+      color: #155724;
+      padding: 15px;
+      border: 1px solid #c3e6cb;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="form-container">
+    <h2>Publicar Nova Questão Acadêmica — UNILAB</h2>
+
+    <div id="resumo-erros" class="resumo-erros"></div>
+    <div id="resumo-sucesso" class="resumo-sucesso"></div>
+
+    <form id="form-cadastro-questao" class="form-cadastro-questao" enctype="multipart/form-data">
+
+      <!-- RF11: Assunto -->
+      <div class="campo-grupo">
+        <label for="assunto">Assunto da Questão <span class="obrigatorio">*</span></label>
+        <input type="text" id="assunto" name="assunto" placeholder="Ex: Métodos Ágeis no Scrum">
+      </div>
+
+      <!-- RF15: Categoria/Disciplina -->
+      <div class="campo-grupo">
+        <label for="categoria">Categoria / Disciplina <span class="obrigatorio">*</span></label>
+        <select id="categoria" name="categoria">
+          <option value="">-- Selecione uma Categoria --</option>
+          <option value="engenharia_software">Engenharia de Software</option>
+          <option value="algoritmos">Algoritmos e Estruturas de Dados</option>
+          <option value="calculo">Cálculo Diferencial e Integral</option>
+          <option value="humanidades">Humanidades e Lusofonia</option>
+          <option value="redes">Redes de Computadores</option>
+        </select>
+      </div>
+
+      <!-- RF12: Enunciado -->
+      <div class="campo-grupo">
+        <label for="enunciado">Enunciado Completo <span class="obrigatorio">*</span></label>
+        <textarea id="enunciado" name="enunciado" rows="4" placeholder="Digite o enunciado detalhado da questão..."></textarea>
+      </div>
+
+      <!-- RF14: Alternativas A-E -->
+      <div class="grupo-alternativas">
+        <label>Alternativas de Múltipla Escolha <span class="obrigatorio">*</span></label>
+        
+        <div class="item-alternativa">
+          <span class="letra-badge">A</span>
+          <input type="text" name="alternativa_a" placeholder="Texto da alternativa A">
+        </div>
+        <div class="item-alternativa">
+          <span class="letra-badge">B</span>
+          <input type="text" name="alternativa_b" placeholder="Texto da alternativa B">
+        </div>
+        <div class="item-alternativa">
+          <span class="letra-badge">C</span>
+          <input type="text" name="alternativa_c" placeholder="Texto da alternativa C">
+        </div>
+        <div class="item-alternativa">
+          <span class="letra-badge">D</span>
+          <input type="text" name="alternativa_d" placeholder="Texto da alternativa D">
+        </div>
+        <div class="item-alternativa">
+          <span class="letra-badge">E</span>
+          <input type="text" name="alternativa_e" placeholder="Texto da alternativa E">
+        </div>
+      </div>
+
+      <!-- RF14: Resposta Correta -->
+      <div class="campo-grupo">
+        <label for="resposta_correta">Alternativa Correta (Gabarito Oficial) <span class="obrigatorio">*</span></label>
+        <select id="resposta_correta" name="resposta_correta">
+          <option value="">-- Selecione a Letra Correta --</option>
+          <option value="A">Alternativa A</option>
+          <option value="B">Alternativa B</option>
+          <option value="C">Alternativa C</option>
+          <option value="D">Alternativa D</option>
+          <option value="E">Alternativa E</option>
+        </select>
+      </div>
+
+      <!-- RF13: Explicação -->
+      <div class="campo-grupo">
+        <label for="explicacao">Explicação do Gabarito <span class="obrigatorio">*</span></label>
+        <textarea id="explicacao" name="explicacao" rows="3" placeholder="Explique por que esta alternativa é a correta para ajudar outros alunos..."></textarea>
+      </div>
+
+      <!-- RF17: Anexo PDF -->
+      <div class="campo-grupo">
+        <label for="anexo_pdf">Anexar Documento PDF (Opcional, máx. 10 MB)</label>
+        <input type="file" id="anexo_pdf" name="anexo_pdf" accept=".pdf,application/pdf">
+      </div>
+
+      <!-- RF18: Anexo Imagens -->
+      <div class="campo-grupo">
+        <label for="anexo_imagens">Anexar Imagens de Apoio (Opcional, JPG/PNG, máx. 3 arquivos de até 5 MB)</label>
+        <input type="file" id="anexo_imagens" name="anexo_imagens" accept="image/jpeg,image/png" multiple>
+      </div>
+
+      <!-- RF19: Link Externo -->
+      <div class="campo-grupo">
+        <label for="link_externo">Link Externo de Referência (Opcional)</label>
+        <input type="url" id="link_externo" name="link_externo" placeholder="https://exemplo.unilab.edu.br/artigo">
+      </div>
+
+      <!-- RF20: Botão de submissão -->
+      <div style="margin-top: 25px;">
+        <button type="submit" class="btn-publicar">Publicar Questão</button>
+      </div>
+
+    </form>
+  </div>
+
+  <script src="assets/js/validacao-cadastro-questao.js"></script>
+  <script>
+    // Mock simples de sucesso para quando a validação passar
+    const form = document.getElementById('form-cadastro-questao');
+    const sucesso = document.getElementById('resumo-sucesso');
+    form.addEventListener('submit', (e) => {
+      // Se não foi cancelado pelo validador, simula envio bem-sucedido
+      if (!e.defaultPrevented) {
+        e.preventDefault();
+        sucesso.style.display = 'block';
+        sucesso.innerHTML = '<strong>Sucesso!</strong> A questão passou por todas as regras de validação (RF11 a RF20) e está pronta para gravação no banco WordPress.';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  </script>
+</body>
+</html>
