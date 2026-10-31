@@ -18,7 +18,7 @@
  * Autor: Assis Barroso (Fase 6 - Implementação)
  */
 
-document.addEventListener('DOMContentLoaded', () => {
+function inicializarValidacaoCadastro() {
     const formCadastro = document.getElementById('form-cadastro-questao') || document.querySelector('.form-cadastro-questao');
 
     if (!formCadastro) {
@@ -32,12 +32,25 @@ document.addEventListener('DOMContentLoaded', () => {
             evento.preventDefault();
             exibirErrosFormulario(formCadastro, erros);
         } else {
-            limparErrosFormulario(formCadastro);
+            // Se estiver em ambiente mock de teste (sem action de backend definida), simula sucesso
+            if (!formCadastro.getAttribute('action')) {
+                evento.preventDefault();
+                exibirSucessoFormulario(formCadastro);
+            } else {
+                limparErrosFormulario(formCadastro);
+            }
         }
     });
 
     configurarValidacaoTempoReal(formCadastro);
-});
+}
+
+// Inicializa com segurança caso o script seja carregado antes ou depois do DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inicializarValidacaoCadastro);
+} else {
+    inicializarValidacaoCadastro();
+}
 
 /**
  * Validação completa em conformidade com as regras de negócio e requisitos
@@ -101,7 +114,7 @@ function validarFormularioQuestao(form) {
         erros.push({ campo: 'resposta_correta', mensagem: 'Selecione qual alternativa é a resposta correta.' });
     } else {
         const letraGabarito = respostaCorreta.value.trim().toUpperCase();
-        if (!letrasPreenchidas.includes(letraGabarito)) {
+        if (letrasPreenchidas.length > 0 && !letrasPreenchidas.includes(letraGabarito)) {
             erros.push({
                 campo: 'resposta_correta',
                 mensagem: `A resposta correta selecionada (${letraGabarito}) não foi preenchida nas alternativas. Escolha entre: ${letrasPreenchidas.join(', ')}.`
@@ -181,11 +194,18 @@ function validarFormularioQuestao(form) {
 
 /**
  * Exibe os erros de forma clara ao lado de cada campo (RF20 / RNF12)
+ * Garante que a mensagem de sucesso seja ocultada imediatamente
  */
 function exibirErrosFormulario(form, erros) {
     limparErrosFormulario(form);
 
-    const resumoErro = form.querySelector('#resumo-erros') || form.querySelector('.resumo-erros');
+    // Oculta mensagem de sucesso se estava visível
+    const resumoSucesso = form.parentNode.querySelector('#resumo-sucesso') || document.getElementById('resumo-sucesso');
+    if (resumoSucesso) {
+        resumoSucesso.style.display = 'none';
+    }
+
+    const resumoErro = form.parentNode.querySelector('#resumo-erros') || document.getElementById('resumo-erros');
     if (resumoErro) {
         resumoErro.textContent = `Atenção: existem ${erros.length} pendência(s) no formulário que impedem a publicação da questão.`;
         resumoErro.style.display = 'block';
@@ -213,6 +233,21 @@ function exibirErrosFormulario(form, erros) {
     const primeiroErro = form.querySelector('.campo-invalido');
     if (primeiroErro) {
         primeiroErro.focus();
+        primeiroErro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+/**
+ * Exibe mensagem de sucesso quando tudo for válido
+ */
+function exibirSucessoFormulario(form) {
+    limparErrosFormulario(form);
+
+    const resumoSucesso = form.parentNode.querySelector('#resumo-sucesso') || document.getElementById('resumo-sucesso');
+    if (resumoSucesso) {
+        resumoSucesso.style.display = 'block';
+        resumoSucesso.innerHTML = '<strong>Validação Aprovada com Sucesso!</strong> A questão atende a todos os critérios (RF11 a RF20, RN03 a RN08) e está pronta para persistência no banco de dados.';
+        resumoSucesso.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -220,7 +255,7 @@ function exibirErrosFormulario(form, erros) {
  * Remove erros anteriores
  */
 function limparErrosFormulario(form) {
-    const resumoErro = form.querySelector('#resumo-erros') || form.querySelector('.resumo-erros');
+    const resumoErro = form.parentNode.querySelector('#resumo-erros') || document.getElementById('resumo-erros');
     if (resumoErro) {
         resumoErro.style.display = 'none';
         resumoErro.textContent = '';

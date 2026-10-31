@@ -195,18 +195,7 @@
     </form>
   </div>
 
+  <!-- Script oficial de validação -->
   <script src="assets/js/validacao-cadastro-questao.js"></script>
-  <script>
-    const form = document.getElementById('form-cadastro-questao');
-    const sucesso = document.getElementById('resumo-sucesso');
-    form.addEventListener('submit', (e) => {
-      if (!e.defaultPrevented) {
-        e.preventDefault();
-        sucesso.style.display = 'block';
-        sucesso.innerHTML = '<strong>Validação Aprovada com Sucesso!</strong> A questão atende a todos os critérios (RF11 a RF20, RN03 a RN08) e está pronta para persistência no banco de dados.';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    });
-  </script>
 </body>
 </html>
