@@ -93,6 +93,20 @@ function unilab_render_figma_footer() {
 }
 
 // ==============================================================================
+// 1.0.1. ROTEAMENTO DE TEMPLATES FIGMA (LOGIN)
+// ==============================================================================
+add_filter( 'template_include', 'unilab_forcar_templates_figma', 99 );
+function unilab_forcar_templates_figma( $template ) {
+    if ( is_page( 'log-in' ) || is_page( 'login' ) || is_page( 31 ) ) {
+        $login_tpl = get_stylesheet_directory() . '/template-login.php';
+        if ( file_exists( $login_tpl ) ) {
+            return $login_tpl;
+        }
+    }
+    return $template;
+}
+
+// ==============================================================================
 // 1.1. REGISTRO DE FALLBACK PARA CPT E TAXONOMIAS
 // ==============================================================================
 add_action( 'init', 'unilab_registrar_cpt_taxonomias_fallback', 5 );
