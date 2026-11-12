@@ -1,6 +1,7 @@
 ﻿<?php
-/*
- * Template Name: Início e Busca Figma
+/**
+ * Template Name: Início e Busca Figma (Pixel Perfect - Dynamic Fullscreen)
+ * Banco de Questões — UNILAB
  */
 
 // 1. Dados do Usuário
@@ -9,12 +10,12 @@ $esta_logado   = is_user_logged_in();
 $nome_aluno    = $esta_logado ? ($usuario_atual->first_name ?: $usuario_atual->display_name) : 'Estudante';
 $iniciais      = $esta_logado ? strtoupper( substr( trim($nome_aluno), 0, 2 ) ) : 'UN';
 
-// 2. Parâmetros de Filtro e Busca
+// 2. Parâmetros de Filtro e Busca (RF25, RF26, RF27)
 $termo_busca = isset($_GET['busca_q']) ? sanitize_text_field($_GET['busca_q']) : '';
 $filtro_disc = isset($_GET['filtro_disc']) ? sanitize_text_field($_GET['filtro_disc']) : '';
 $paged       = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : ( ( get_query_var( 'page' ) ) ? get_query_var( 'page' ) : 1 );
 
-// URL base da página atual (sem query string), para uso nos forms e links
+// URL base da página atual (sem query string)
 $url_pagina_atual = strtok( $_SERVER['REQUEST_URI'], '?' );
 
 $args = array(
@@ -59,444 +60,605 @@ if ( ! empty($filtro_disc) ) {
 $query_feed     = new WP_Query( $args );
 $total_questoes = $query_feed->found_posts;
 ?>
-
-<style>
-  /* 1. ELIMINA O TÍTULO 'HOME' E CABEÇALHOS DO ASTRA */
-  .entry-title,
-  h1.entry-title,
-  .entry-header,
-  header.entry-header,
-  .ast-single-post-order,
-  .site-header,
-  .ast-desktop-header,
-  .ast-mobile-header,
-  .site-footer {
-    display: none !important;
-  }
-
-  /* 2. FORÇA A PÁGINA A OCUPAR 100% DA TELA */
-  html, body {
-    background-color: #f8fafc !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .site-content,
-  #content,
-  .ast-container,
-  #primary,
-  #main,
-  article,
-  .entry-content {
-    max-width: 100% !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* 3. ESCOPO GERAL */
-  .figma-root-scope {
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
-    background-color: #f8fafc !important;
-    color: #0f172a !important;
-    width: 100% !important;
-    min-height: 100vh !important;
-    box-sizing: border-box !important;
-  }
-  .figma-root-scope *,
-  .figma-root-scope *::before,
-  .figma-root-scope *::after {
-    box-sizing: border-box !important;
-  }
-
-  /* 4. NAVBAR */
-  .figma-navbar {
-    width: 100% !important;
-    background: #ffffff !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    padding: 14px 48px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 999 !important;
-  }
-  .figma-navbar-brand {
-    display: flex !important;
-    align-items: center !important;
-    gap: 12px !important;
-    text-decoration: none !important;
-  }
-  .figma-brand-icon {
-    width: 32px !important;
-    height: 32px !important;
-    background: #0f284e !important;
-    border-radius: 8px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    color: #ffffff !important;
-  }
-  .figma-brand-text {
-    font-size: 17px !important;
-    font-weight: 800 !important;
-    color: #0f284e !important;
-    letter-spacing: -0.3px !important;
-  }
-  .figma-nav-links {
-    display: flex !important;
-    gap: 28px !important;
-    list-style: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .figma-nav-links a {
-    color: #475569 !important;
-    text-decoration: none !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-  }
-  .figma-nav-links a:hover,
-  .figma-nav-links a.active {
-    color: #0f284e !important;
-    font-weight: 700 !important;
-  }
-  .figma-nav-user {
-    display: flex !important;
-    align-items: center !important;
-    gap: 10px !important;
-  }
-  .figma-avatar-circle {
-    width: 36px !important;
-    height: 36px !important;
-    background: #dbeafe !important;
-    color: #1e40af !important;
-    border-radius: 50% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-weight: 700 !important;
-    font-size: 13px !important;
-  }
-  .figma-user-meta { line-height: 1.2 !important; text-align: left !important; }
-  .figma-user-name { font-size: 13px !important; font-weight: 700 !important; color: #0f284e !important; }
-  .figma-user-role { font-size: 11px !important; color: #64748b !important; }
-
-  /* 5. HERO */
-  .figma-hero-section {
-    text-align: center !important;
-    padding: 50px 20px 30px 20px !important;
-    max-width: 820px !important;
-    margin: 0 auto !important;
-  }
-  .figma-hero-tagline {
-    font-size: 11px !important;
-    font-weight: 800 !important;
-    letter-spacing: 1.2px !important;
-    color: #2563eb !important;
-    text-transform: uppercase !important;
-    margin-bottom: 12px !important;
-  }
-  .figma-hero-title {
-    font-size: 38px !important;
-    font-weight: 800 !important;
-    color: #0f284e !important;
-    letter-spacing: -0.6px !important;
-    margin: 0 0 10px 0 !important;
-    line-height: 1.2 !important;
-  }
-  .figma-hero-subtitle {
-    font-size: 15px !important;
-    color: #64748b !important;
-    margin: 0 0 28px 0 !important;
-  }
-
-  /* BARRA PÍLULA */
-  .figma-search-pill {
-    display: flex !important;
-    align-items: center !important;
-    background: #ffffff !important;
-    border: 1.5px solid #cbd5e1 !important;
-    border-radius: 50px !important;
-    padding: 5px 6px 5px 20px !important;
-    box-shadow: 0 4px 14px rgba(15,40,78,0.05) !important;
-    max-width: 680px !important;
-    margin: 0 auto 10px auto !important;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-  }
-  .figma-search-pill:focus-within {
-    border-color: #0f284e !important;
-    box-shadow: 0 4px 18px rgba(15,40,78,0.1) !important;
-  }
-  .figma-search-pill svg { flex-shrink: 0 !important; margin-right: 10px !important; color: #64748b !important; }
-  .figma-search-input {
-    flex: 1 !important;
-    border: none !important;
-    outline: none !important;
-    background: transparent !important;
-    font-size: 14px !important;
-    color: #0f172a !important;
-  }
-  .figma-search-btn {
-    background: #0f284e !important;
-    color: #ffffff !important;
-    border: none !important;
-    padding: 10px 22px !important;
-    border-radius: 40px !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    cursor: pointer !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-    transition: background 0.15s ease !important;
-  }
-  .figma-search-btn:hover { background: #091a33 !important; }
-  .figma-search-hint { font-size: 12px !important; color: #94a3b8 !important; }
-
-  /* 6. CONTAINER PRINCIPAL */
-  .figma-main-container {
-    max-width: 1140px !important;
-    margin: 30px auto 60px auto !important;
-    padding: 0 20px !important;
-  }
-
-  /* CABEÇALHO DA LISTAGEM */
-  .figma-section-header {
-    display: flex !important;
-    align-items: flex-end !important;
-    justify-content: space-between !important;
-    margin-bottom: 24px !important;
-  }
-  .figma-section-title { font-size: 22px !important; font-weight: 800 !important; color: #0f284e !important; margin: 0 0 4px 0 !important; }
-  .figma-section-subtitle { font-size: 13px !important; color: #64748b !important; }
-  .figma-btn-publicar {
-    background: #0f284e !important;
-    color: #ffffff !important;
-    text-decoration: none !important;
-    padding: 10px 18px !important;
-    border-radius: 6px !important;
-    font-size: 13px !important;
-    font-weight: 700 !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    transition: background 0.15s ease !important;
-  }
-  .figma-btn-publicar:hover { background: #091a33 !important; color: #ffffff !important; }
-
-  /* BARRA DE TAGS — DISCRETAS */
-  .figma-active-tags-row {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    margin-bottom: 20px !important;
-  }
-  .figma-tags-left {
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-    flex-wrap: wrap !important;
-  }
-  .figma-tag-pill {
-    background: #f1f5f9 !important;
-    color: #475569 !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 20px !important;
-    padding: 3px 8px 3px 12px !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    transition: all 0.15s ease !important;
-    user-select: none !important;
-  }
-  .figma-tag-pill:hover { background: #e2e8f0 !important; color: #1e293b !important; }
-  .figma-tag-pill a {
-    color: #94a3b8 !important;
-    text-decoration: none !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 16px !important;
-    height: 16px !important;
-    border-radius: 50% !important;
-    outline: none !important;
-    transition: all 0.15s ease !important;
-  }
-  .figma-tag-pill a:hover { background: #cbd5e1 !important; color: #0f172a !important; }
-  .figma-tag-pill a:focus { outline: none !important; }
-
-  /* GRID 2 COLUNAS */
-  .figma-layout-grid {
-    display: grid !important;
-    grid-template-columns: 260px 1fr !important;
-    gap: 24px !important;
-    align-items: start !important;
-  }
-
-  /* SIDEBAR */
-  .figma-sidebar-card {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 12px !important;
-    padding: 22px !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
-  }
-  .figma-sidebar-title { font-size: 16px !important; font-weight: 800 !important; color: #0f284e !important; margin: 0 0 16px 0 !important; }
-  .figma-form-group { margin-bottom: 14px !important; }
-  .figma-form-group label { display: block !important; font-size: 12px !important; font-weight: 700 !important; color: #334155 !important; margin-bottom: 5px !important; }
-  .figma-form-group select {
-    width: 100% !important;
-    padding: 9px 12px !important;
-    border: 1.5px solid #cbd5e1 !important;
-    border-radius: 6px !important;
-    font-size: 13px !important;
-    color: #0f172a !important;
-    background: #ffffff !important;
-    outline: none !important;
-    cursor: pointer !important;
-  }
-  .figma-sidebar-note { font-size: 11px !important; color: #94a3b8 !important; line-height: 1.4 !important; margin-bottom: 16px !important; }
-  .figma-btn-aplicar {
-    width: 100% !important;
-    padding: 10px !important;
-    background: #0f284e !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    font-size: 13px !important;
-    font-weight: 700 !important;
-    cursor: pointer !important;
-    transition: background 0.15s ease !important;
-  }
-  .figma-btn-aplicar:hover { background: #091a33 !important; }
-  .figma-link-limpar {
-    display: block !important;
-    text-align: center !important;
-    color: #64748b !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    text-decoration: none !important;
-    margin-top: 10px !important;
-  }
-  .figma-link-limpar:hover { color: #0f284e !important; }
-
-  /* CARDS */
-  .figma-cards-stack { display: flex !important; flex-direction: column !important; gap: 16px !important; }
-  .figma-card {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 12px !important;
-    padding: 22px 24px !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-    transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
-  }
-  .figma-card:hover { box-shadow: 0 6px 18px rgba(15,40,78,0.06) !important; border-color: #cbd5e1 !important; }
-  .figma-card-badges { display: flex !important; gap: 8px !important; margin-bottom: 10px !important; }
-  .badge-primary { background: #e0f2fe !important; color: #0284c7 !important; font-size: 11px !important; font-weight: 700 !important; padding: 3px 8px !important; border-radius: 4px !important; }
-  .badge-secondary { background: #f1f5f9 !important; color: #475569 !important; font-size: 11px !important; font-weight: 600 !important; padding: 3px 8px !important; border-radius: 4px !important; }
-  .figma-card-title { font-size: 17px !important; font-weight: 700 !important; color: #0f284e !important; margin: 0 0 8px 0 !important; line-height: 1.35 !important; }
-  .figma-card-title a { color: #0f284e !important; text-decoration: none !important; }
-  .figma-card-title a:hover { color: #2563eb !important; }
-  .figma-card-snippet { font-size: 13px !important; color: #475569 !important; line-height: 1.5 !important; margin: 0 0 18px 0 !important; }
-  .figma-card-footer {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding-top: 14px !important;
-    border-top: 1px solid #f1f5f9 !important;
-  }
-  .figma-meta-left { line-height: 1.3 !important; }
-  .figma-meta-author { font-size: 12px !important; color: #64748b !important; font-weight: 600 !important; }
-  .figma-meta-sub { font-size: 11px !important; color: #94a3b8 !important; }
-  .figma-meta-right { display: flex !important; align-items: center !important; gap: 16px !important; }
-  .figma-like-counter { display: flex !important; align-items: center !important; gap: 5px !important; color: #64748b !important; font-size: 12px !important; font-weight: 600 !important; }
-  .figma-btn-resolver {
-    background: transparent !important;
-    color: #0f284e !important;
-    border: 1.5px solid #0f284e !important;
-    border-radius: 6px !important;
-    padding: 7px 16px !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    text-decoration: none !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    transition: all 0.15s ease !important;
-  }
-  .figma-btn-resolver:hover { background: #0f284e !important; color: #ffffff !important; }
-
-  /* PAGINAÇÃO */
-  .figma-pagination-row { display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 35px !important; padding-top: 20px !important; }
-  .figma-pagination-info { font-size: 12px !important; color: #64748b !important; }
-  .figma-pagination-nav { display: flex !important; gap: 6px !important; }
-  .figma-page-btn { padding: 6px 12px !important; background: #ffffff !important; border: 1px solid #cbd5e1 !important; border-radius: 6px !important; font-size: 12px !important; font-weight: 600 !important; color: #475569 !important; text-decoration: none !important; cursor: pointer !important; }
-  .figma-page-btn.active { background: #0f284e !important; color: #ffffff !important; border-color: #0f284e !important; }
-
-  /* RODAPÉ */
-  .figma-footer { text-align: center !important; padding: 30px 20px !important; border-top: 1px solid #e2e8f0 !important; color: #94a3b8 !important; font-size: 12px !important; margin-top: 60px !important; }
-
-  /* RESPONSIVIDADE MOBILE FIGMA (Início e busca — Mobile.svg) */
-  @media (max-width: 860px) {
-    .figma-navbar {
-      padding: 12px 16px !important;
+<!DOCTYPE html>
+<html <?php language_attributes(); ?>>
+<head>
+  <meta charset="<?php bloginfo( 'charset' ); ?>">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Banco de Questões — UNILAB</title>
+  <?php wp_head(); ?>
+  <style>
+    /* RESET GLOBAL E TELA CHEIA DINÂMICA */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 100vh !important;
+      background-color: #f8fafc !important;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
+      color: #0f172a !important;
+      -webkit-font-smoothing: antialiased;
+      box-sizing: border-box !important;
     }
-    .figma-nav-links {
+
+    *, *::before, *::after {
+      box-sizing: border-box !important;
+    }
+
+    .site-header, .site-footer, .ast-footer-overlay,
+    .ast-desktop-header, .ast-mobile-header,
+    .entry-header, .entry-title {
       display: none !important;
     }
-    .figma-hero-section {
-      padding: 32px 16px 28px 16px !important;
+
+    .figma-home-layout {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      width: 100%;
+      background-color: #f8fafc;
     }
+
+    /* BARRA SUPERIOR INSTITUCIONAL (35px) */
+    .figma-top-bar {
+      width: 100%;
+      height: 35px;
+      background-color: #102D5C;
+      display: flex;
+      align-items: center;
+      padding: 0 48px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #b9cdf0;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    /* NAVBAR FIGMA */
+    .figma-navbar {
+      width: 100%;
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 14px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+
+    .figma-navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .figma-brand-icon {
+      width: 34px;
+      height: 34px;
+      background: #102D5C;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+    }
+
+    .figma-brand-text {
+      font-size: 18px;
+      font-weight: 800;
+      color: #102D5C;
+      letter-spacing: -0.3px;
+    }
+
+    .figma-nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .figma-nav-links a {
+      text-decoration: none;
+      font-size: 14px;
+      color: #64748b;
+      font-weight: 600;
+      transition: color 0.15s ease;
+    }
+
+    .figma-nav-links a:hover,
+    .figma-nav-links a.active {
+      color: #102D5C;
+      font-weight: 700;
+    }
+
+    .figma-nav-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .figma-avatar-circle {
+      width: 36px;
+      height: 36px;
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .figma-user-meta { line-height: 1.25; text-align: left; }
+    .figma-user-name { font-size: 13px; font-weight: 700; color: #102D5C; }
+    .figma-user-role { font-size: 11px; color: #64748b; }
+
+    /* HERO BANNER FLUIDO (Figma fill #EAF0FC) */
+    .figma-hero-banner {
+      width: 100%;
+      background: #EAF0FC;
+      border-bottom: 1px solid #D9E0EA;
+      padding: 56px 24px 48px 24px;
+      text-align: center;
+    }
+
+    .figma-hero-inner {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .figma-hero-tagline {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      color: #1d4ed8;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
     .figma-hero-title {
-      font-size: 24px !important;
-      line-height: 1.25 !important;
+      font-size: 38px;
+      font-weight: 900;
+      color: #102D5C;
+      letter-spacing: -0.6px;
+      margin: 0 0 12px 0;
+      line-height: 1.2;
     }
+
     .figma-hero-subtitle {
-      font-size: 13px !important;
+      font-size: 16px;
+      color: #475569;
+      margin: 0 0 32px 0;
+      line-height: 1.5;
     }
-    .figma-search-bar {
-      flex-direction: column !important;
-      padding: 10px !important;
-      border-radius: 12px !important;
+
+    /* BARRA DE PESQUISA PÍLULA FIGMA */
+    .figma-search-pill {
+      display: flex;
+      align-items: center;
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 50px;
+      padding: 6px 8px 6px 24px;
+      box-shadow: 0 4px 16px rgba(16, 45, 92, 0.06);
+      max-width: 740px;
+      margin: 0 auto 12px auto;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .figma-search-input-box {
-      width: 100% !important;
-      margin-bottom: 8px !important;
+
+    .figma-search-pill:focus-within {
+      border-color: #102D5C;
+      box-shadow: 0 4px 20px rgba(16, 45, 92, 0.12);
     }
-    .figma-btn-search {
-      width: 100% !important;
-      justify-content: center !important;
+
+    .figma-search-pill svg {
+      flex-shrink: 0;
+      margin-right: 12px;
+      color: #64748b;
     }
-    .figma-main-layout {
-      flex-direction: column !important;
-      padding: 0 16px !important;
-      gap: 20px !important;
+
+    .figma-search-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 15px;
+      color: #0f172a;
+      font-family: inherit;
     }
-    .figma-sidebar {
-      width: 100% !important;
+
+    .figma-search-btn {
+      background: #102D5C;
+      color: #ffffff;
+      border: none;
+      padding: 12px 26px;
+      border-radius: 40px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s ease;
     }
+
+    .figma-search-btn:hover {
+      background: #091a33;
+    }
+
+    .figma-search-hint {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* CONTAINER PRINCIPAL DO FEED */
+    .figma-main-container {
+      max-width: 1320px;
+      width: 100%;
+      margin: 36px auto 60px auto;
+      padding: 0 32px;
+      flex: 1;
+    }
+
+    /* CABEÇALHO DA LISTAGEM */
     .figma-section-header {
-      flex-direction: column !important;
-      align-items: flex-start !important;
-      gap: 12px !important;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 24px;
     }
+
+    .figma-section-title {
+      font-size: 24px;
+      font-weight: 900;
+      color: #102D5C;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.4px;
+    }
+
+    .figma-section-subtitle {
+      font-size: 13px;
+      color: #64748b;
+    }
+
     .figma-btn-publicar {
-      width: 100% !important;
-      justify-content: center !important;
+      background: #102D5C;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 11px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s ease;
     }
-  }
-</style>
 
-<div class="figma-root-scope">
+    .figma-btn-publicar:hover {
+      background: #091a33;
+      color: #ffffff;
+    }
 
-  <!-- 1. Header -->
+    /* BARRA DE TAGS ATIVAS */
+    .figma-active-tags-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .figma-tags-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .figma-tag-pill {
+      background: #e2e8f0;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      border-radius: 20px;
+      padding: 4px 10px 4px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .figma-tag-pill a {
+      color: #64748b;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+    }
+
+    .figma-tag-pill a:hover {
+      background: #cbd5e1;
+      color: #0f172a;
+    }
+
+    /* GRID DO LAYOUT 2 COLUNAS */
+    .figma-layout-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+
+    /* SIDEBAR */
+    .figma-sidebar-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      position: sticky;
+      top: 90px;
+    }
+
+    .figma-sidebar-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #102D5C;
+      margin: 0 0 18px 0;
+    }
+
+    .figma-form-group {
+      margin-bottom: 16px;
+    }
+
+    .figma-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 6px;
+    }
+
+    .figma-form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #0f172a;
+      background: #ffffff;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .figma-form-group select:focus {
+      border-color: #102D5C;
+    }
+
+    .figma-sidebar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .figma-btn-filtrar {
+      width: 100%;
+      background: #102D5C;
+      color: #ffffff;
+      border: none;
+      padding: 11px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .figma-btn-limpar {
+      width: 100%;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+      padding: 9px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    /* STACK DE CARDS DE QUESTÃO */
+    .figma-cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .figma-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .figma-card:hover {
+      box-shadow: 0 4px 14px rgba(16, 45, 92, 0.06);
+      transform: translateY(-1px);
+    }
+
+    .figma-card-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .badge-primary {
+      background: #e0f2fe;
+      color: #0284c7;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .badge-secondary {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .figma-card-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #102D5C;
+      margin: 0 0 10px 0;
+      line-height: 1.35;
+    }
+
+    .figma-card-title a {
+      color: #102D5C;
+      text-decoration: none;
+    }
+
+    .figma-card-title a:hover {
+      color: #2563eb;
+    }
+
+    .figma-card-snippet {
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.55;
+      margin: 0 0 18px 0;
+    }
+
+    .figma-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 16px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    .figma-meta-left { line-height: 1.3; }
+    .figma-meta-author { font-size: 12px; color: #64748b; font-weight: 600; }
+    .figma-meta-sub { font-size: 11px; color: #94a3b8; }
+    .figma-meta-right { display: flex; align-items: center; gap: 16px; }
+    .figma-like-counter { display: flex; align-items: center; gap: 5px; color: #64748b; font-size: 12px; font-weight: 600; }
+
+    .figma-btn-resolver {
+      background: transparent;
+      color: #102D5C;
+      border: 1.5px solid #102D5C;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .figma-btn-resolver:hover {
+      background: #102D5C;
+      color: #ffffff;
+    }
+
+    /* PAGINAÇÃO */
+    .figma-pagination-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .figma-pagination-info { font-size: 12px; color: #64748b; }
+    .figma-pagination-nav { display: flex; gap: 6px; }
+
+    .figma-page-btn, .page-numbers {
+      padding: 7px 14px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .page-numbers.current, .figma-page-btn.active {
+      background: #102D5C !important;
+      color: #ffffff !important;
+      border-color: #102D5C !important;
+    }
+
+    /* RODAPÉ FIGMA */
+    .figma-footer {
+      width: 100%;
+      background: #ffffff;
+      border-top: 1px solid #e2e8f0;
+      padding: 24px 32px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+
+    /* RESPONSIVIDADE MOBILE FIGMA (Início e busca — Mobile.svg) */
+    @media (max-width: 860px) {
+      .figma-top-bar { padding: 0 16px; font-size: 10px; }
+      .figma-navbar { padding: 12px 16px; }
+      .figma-nav-links { display: none; }
+      .figma-hero-banner { padding: 36px 16px 32px 16px; }
+      .figma-hero-title { font-size: 26px; }
+      .figma-hero-subtitle { font-size: 14px; margin-bottom: 24px; }
+      .figma-search-pill { flex-direction: column; padding: 10px; border-radius: 12px; gap: 8px; }
+      .figma-search-input { width: 100%; text-align: center; }
+      .figma-search-btn { width: 100%; justify-content: center; }
+      .figma-main-container { padding: 0 16px; margin: 24px auto 40px auto; }
+      .figma-layout-grid { grid-template-columns: 1fr; gap: 24px; }
+      .figma-sidebar-card { position: static; }
+      .figma-section-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+      .figma-btn-publicar { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="figma-home-layout">
+
+  <!-- Faixa Institucional 35px -->
+  <div class="figma-top-bar">
+    Universidade da Integração Internacional da Lusofonia Afro-Brasileira · UNILAB
+  </div>
+
+  <!-- Header / Navbar Oficial Figma -->
   <header class="figma-navbar">
-    <a href="<?php echo home_url('/'); ?>" class="figma-navbar-brand">
+    <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-navbar-brand">
       <div class="figma-brand-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -506,9 +668,9 @@ $total_questoes = $query_feed->found_posts;
       <span class="figma-brand-text">Banco de Questões</span>
     </a>
     <ul class="figma-nav-links">
-      <li><a href="<?php echo home_url('/'); ?>" class="active">Início</a></li>
-      <li><a href="#">Favoritos</a></li>
-      <li><a href="/cadastrar-questao/">Minhas questões</a></li>
+      <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="active">Início</a></li>
+      <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>">Favoritos</a></li>
+      <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>">Minhas questões</a></li>
     </ul>
     <div class="figma-nav-user">
       <div class="figma-avatar-circle"><?php echo esc_html( $iniciais ); ?></div>
@@ -519,220 +681,118 @@ $total_questoes = $query_feed->found_posts;
     </div>
   </header>
 
-  <!-- 2. Hero + Busca -->
-  <section class="figma-hero-section">
-    <div class="figma-hero-tagline">
-      OLÁ, <?php echo esc_html( strtoupper($nome_aluno) ); ?>. O QUE VAMOS APRENDER HOJE?
-    </div>
-    <h1 class="figma-hero-title">Uma pergunta. Novas possibilidades.</h1>
-    <p class="figma-hero-subtitle">Encontre questões, aprofunde conceitos e estude no seu ritmo.</p>
+  <!-- Hero Banner Fluido -->
+  <section class="figma-hero-banner">
+    <div class="figma-hero-inner">
+      <div class="figma-hero-tagline">BANCO DE QUESTÕES · UNILAB</div>
+      <h1 class="figma-hero-title">Pratique, Compartilhe e Evolua</h1>
+      <p class="figma-hero-subtitle">Explore questões colaborativas elaboradas por estudantes e professores de todos os cursos e campi da UNILAB.</p>
 
-    <form method="GET" action="<?php echo esc_attr( $url_pagina_atual ); ?>">
-      <?php if ( ! empty($filtro_disc) ): ?>
-        <input type="hidden" name="filtro_disc" value="<?php echo esc_attr($filtro_disc); ?>">
-      <?php endif; ?>
-      <div class="figma-search-pill">
+      <form method="GET" action="<?php echo esc_url( $url_pagina_atual ); ?>" class="figma-search-pill">
+        <?php if ( ! empty($filtro_disc) ) : ?>
+          <input type="hidden" name="filtro_disc" value="<?php echo esc_attr($filtro_disc); ?>">
+        <?php endif; ?>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" name="busca_q" class="figma-search-input" placeholder="Busque por assunto, palavra-chave ou conteúdo do enunciado." value="<?php echo esc_attr( $termo_busca ); ?>">
-        <button type="submit" class="figma-search-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          Buscar questões
-        </button>
-      </div>
-      <div class="figma-search-hint">Busque por assunto, palavra-chave ou conteúdo do enunciado.</div>
-    </form>
+        <input type="text" name="busca_q" class="figma-search-input" placeholder="Buscar por assunto, enunciado ou palavra-chave..." value="<?php echo esc_attr($termo_busca); ?>">
+        <button type="submit" class="figma-search-btn">Buscar</button>
+      </form>
+      <div class="figma-search-hint">Ex: Algoritmos, Arquitetura MVC, Cálculo, Redes de Computadores...</div>
+    </div>
   </section>
 
-  <!-- 3. Container Principal -->
+  <!-- Container Principal -->
   <main class="figma-main-container">
 
-    <?php if ( isset($_GET['msg']) && $_GET['msg'] === 'questao_excluida' ): ?>
-      <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 14px 20px; border-radius: 8px; font-weight: 600; margin-bottom: 25px; display: flex; align-items: center; gap: 8px;">
-        <span>🗑️</span> A questão foi excluída permanentemente pelo autor com sucesso.
-      </div>
-    <?php elseif ( isset($_GET['msg']) && $_GET['msg'] === 'questao_atualizada' ): ?>
-      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 14px 20px; border-radius: 8px; font-weight: 600; margin-bottom: 25px; display: flex; align-items: center; gap: 8px;">
-        <span>🎉</span> As alterações da questão foram salvas com sucesso pelo autor!
-      </div>
-    <?php endif; ?>
-
-    <!-- Cabeçalho -->
+    <!-- Cabeçalho da Listagem -->
     <div class="figma-section-header">
       <div>
-        <h2 class="figma-section-title">Questões para explorar</h2>
+        <h2 class="figma-section-title">Questões Acadêmicas</h2>
         <div class="figma-section-subtitle">
-          <?php echo esc_html( $total_questoes ); ?> resultados<?php echo !empty($termo_busca) ? ' para "' . esc_html($termo_busca) . '"' : ''; ?>
+          <?php echo $total_questoes; ?> questão(ões) encontrada(s) no repositório colaborativo
         </div>
       </div>
-      <a href="/cadastrar-questao/" class="figma-btn-publicar">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
+      <a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="figma-btn-publicar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Publicar questão
       </a>
     </div>
 
-    <!-- Tags Ativas Discretas (RF26, RF27) -->
-    <div class="figma-active-tags-row">
-      <div class="figma-tags-left">
-        <?php $tem_filtro = false; ?>
+    <!-- Tags Discretas de Filtro Ativo -->
+    <?php if ( ! empty($termo_busca) || ! empty($filtro_disc_nome) ) : ?>
+      <div class="figma-active-tags-row">
+        <div class="figma-tags-left">
+          <?php if ( ! empty($termo_busca) ) : ?>
+            <span class="figma-tag-pill">
+              Busca: <strong>"<?php echo esc_html($termo_busca); ?>"</strong>
+              <a href="<?php echo esc_url( remove_query_arg('busca_q') ); ?>" title="Remover filtro de busca">✕</a>
+            </span>
+          <?php endif; ?>
 
-        <?php if ( ! empty( $termo_busca ) ) : $tem_filtro = true; ?>
-          <span class="figma-tag-pill">
-            Busca: "<?php echo esc_html( $termo_busca ); ?>"
-            <a href="<?php echo esc_attr( $url_pagina_atual . ( !empty($filtro_disc) ? '?filtro_disc=' . urlencode($filtro_disc) : '' ) ); ?>" title="Remover busca">✕</a>
-          </span>
-        <?php endif; ?>
+          <?php if ( ! empty($filtro_disc_nome) ) : ?>
+            <span class="figma-tag-pill">
+              Disciplina: <strong><?php echo esc_html($filtro_disc_nome); ?></strong>
+              <a href="<?php echo esc_url( remove_query_arg('filtro_disc') ); ?>" title="Remover filtro de disciplina">✕</a>
+            </span>
+          <?php endif; ?>
+        </div>
 
-        <?php if ( ! empty( $filtro_disc ) ) : $tem_filtro = true; ?>
-          <span class="figma-tag-pill">
-            Disciplina: <?php echo esc_html( !empty($filtro_disc_nome) ? $filtro_disc_nome : $filtro_disc ); ?>
-            <a href="<?php echo esc_attr( $url_pagina_atual . ( !empty($termo_busca) ? '?busca_q=' . urlencode($termo_busca) : '' ) ); ?>" title="Remover filtro">✕</a>
-          </span>
-        <?php endif; ?>
-
-        <?php if ( ! $tem_filtro ) : ?>
-          <span style="font-size: 13px; color: #64748b;">Nenhum filtro ativo (exibindo todas as questões)</span>
-        <?php endif; ?>
+        <a href="<?php echo esc_url( $url_pagina_atual ); ?>" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 600;">
+          Limpar todos os filtros
+        </a>
       </div>
-      <div style="font-size: 12px; color: #64748b; font-weight: 600;">Mais recentes ↓</div>
-    </div>
+    <?php endif; ?>
 
-    <!-- Grid 2 Colunas -->
+    <!-- Layout Grid 2 Colunas -->
     <div class="figma-layout-grid">
 
-      <!-- Sidebar Filtros (RF27) -->
+      <!-- Sidebar de Filtros -->
       <aside class="figma-sidebar-card">
-        <h3 class="figma-sidebar-title">Refinar busca</h3>
-        <form method="GET" action="<?php echo esc_attr( $url_pagina_atual ); ?>">
-          <?php if ( ! empty($termo_busca) ): ?>
+        <h3 class="figma-sidebar-title">Filtros Rápidos</h3>
+        <form method="GET" action="<?php echo esc_url( $url_pagina_atual ); ?>">
+          <?php if ( ! empty($termo_busca) ) : ?>
             <input type="hidden" name="busca_q" value="<?php echo esc_attr($termo_busca); ?>">
           <?php endif; ?>
 
           <div class="figma-form-group">
-            <label for="select-categoria">Categoria</label>
-            <select id="select-categoria" name="categoria_fake">
-              <option value="">Todas as Categorias</option>
-              <option value="computacao">Computação</option>
-              <option value="engenharia">Engenharia</option>
-              <option value="ciencias">Ciências Exatas e Humanas</option>
+            <label for="select-categoria">Categoria / Curso</label>
+            <select id="select-categoria" name="filtro_cat">
+              <option value="">Todas as categorias</option>
+              <option value="engenharia_software" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'engenharia_software'); ?>>Engenharia de Software</option>
+              <option value="exatas" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'exatas'); ?>>Ciências Exatas</option>
+              <option value="humanidades" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'humanidades'); ?>>Humanidades e Lusofonia</option>
             </select>
           </div>
 
           <div class="figma-form-group">
             <label for="select-subcategoria">Subcategoria</label>
-            <select id="select-subcategoria" name="subcategoria_fake">
-              <option value="">Selecione uma categoria primeiro</option>
+            <select id="select-subcategoria" name="filtro_sub">
+              <option value="">Todas as subcategorias</option>
             </select>
           </div>
 
           <div class="figma-form-group">
-            <label for="select-disciplina">Disciplina</label>
-            <select name="filtro_disc" id="select-disciplina">
-              <option value="">Todas as Disciplinas</option>
-              <?php
-              $todas_disciplinas = get_terms( array(
-                  'taxonomy'   => array( 'disciplina', 'categoria_disciplina' ),
-                  'hide_empty' => false,
-              ) );
-
-              $opcoes_disciplinas = array();
-              if ( ! empty( $todas_disciplinas ) && ! is_wp_error( $todas_disciplinas ) ) {
-                  foreach ( $todas_disciplinas as $d ) {
-                      $opcoes_disciplinas[$d->slug] = $d->name;
-                  }
-              }
-
-              // Fallbacks padrão UNILAB caso o banco não tenha todos os termos ainda
-              $padrao_unilab = array(
-                  'engenharia-de-software'           => 'Engenharia de Software',
-                  'algoritmos-e-estruturas-de-dados' => 'Algoritmos e Estruturas de Dados',
-                  'redes-de-computadores'            => 'Redes de Computadores',
-                  'calculo-diferencial'              => 'Cálculo Diferencial e Integral',
-                  'humanidades-e-lusofonia'          => 'Humanidades e Lusofonia',
-              );
-              foreach ( $padrao_unilab as $slug_padrao => $nome_padrao ) {
-                  if ( ! isset( $opcoes_disciplinas[$slug_padrao] ) ) {
-                      $opcoes_disciplinas[$slug_padrao] = $nome_padrao;
-                  }
-              }
-
-              foreach ( $opcoes_disciplinas as $d_slug => $d_nome ) {
-                  $is_selected = ( $filtro_disc === $d_slug || $filtro_disc === $d_nome ) ? 'selected' : '';
-                  echo '<option value="' . esc_attr( $d_slug ) . '" ' . $is_selected . '>' . esc_html( $d_nome ) . '</option>';
-              }
-              ?>
+            <label for="select-disciplina">Disciplina Específica</label>
+            <select id="select-disciplina" name="filtro_disc">
+              <option value="">Todas as disciplinas</option>
+              <option value="engenharia_software" <?php selected($filtro_disc === 'engenharia_software'); ?>>Engenharia de Software</option>
+              <option value="algoritmos" <?php selected($filtro_disc === 'algoritmos'); ?>>Algoritmos e Estruturas</option>
+              <option value="calculo" <?php selected($filtro_disc === 'calculo'); ?>>Cálculo Diferencial</option>
+              <option value="redes" <?php selected($filtro_disc === 'redes'); ?>>Redes de Computadores</option>
+              <option value="humanidades" <?php selected($filtro_disc === 'humanidades'); ?>>Humanidades e Lusofonia</option>
             </select>
           </div>
 
-          <div class="figma-sidebar-note">A subcategoria seleciona automaticamente a disciplina correspondente.</div>
-
-          <button type="submit" class="figma-btn-aplicar">Aplicar filtros</button>
-
-          <?php if ( !empty($filtro_disc) || !empty($termo_busca) ): ?>
-            <a href="<?php echo esc_attr( $url_pagina_atual ); ?>" class="figma-link-limpar">Limpar filtros</a>
-          <?php endif; ?>
+          <div class="figma-sidebar-actions">
+            <button type="submit" class="figma-btn-filtrar">Aplicar Filtros</button>
+            <a href="<?php echo esc_url( $url_pagina_atual ); ?>" class="figma-btn-limpar">Limpar Filtros</a>
+          </div>
         </form>
       </aside>
 
-      <!-- Script: Subcategoria dinâmica que atualiza o select de Disciplina com slug válido -->
-      <script>
-      (function() {
-        var mapa = {
-          'computacao': [
-            { label: 'Engenharia de Software',  slug: 'engenharia-de-software' },
-            { label: 'Algoritmos e Estruturas', slug: 'algoritmos-e-estruturas-de-dados' },
-            { label: 'Redes de Computadores',   slug: 'redes-de-computadores' }
-          ],
-          'engenharia': [
-            { label: 'Engenharia de Software',  slug: 'engenharia-de-software' },
-            { label: 'Sistemas e Redes',        slug: 'redes-de-computadores' }
-          ],
-          'ciencias': [
-            { label: 'Cálculo Diferencial',     slug: 'calculo-diferencial' },
-            { label: 'Humanidades e Lusofonia', slug: 'humanidades-e-lusofonia' }
-          ]
-        };
-
-        var selCat  = document.getElementById('select-categoria');
-        var selSub  = document.getElementById('select-subcategoria');
-        var selDisc = document.getElementById('select-disciplina');
-
-        if ( selCat && selSub && selDisc ) {
-          selCat.addEventListener('change', function() {
-            var cat = this.value;
-            selSub.innerHTML = '<option value="">Todas as subcategorias</option>';
-
-            if ( mapa[cat] ) {
-              mapa[cat].forEach(function(item) {
-                var opt = document.createElement('option');
-                opt.value = item.slug;
-                opt.textContent = item.label;
-                selSub.appendChild(opt);
-              });
-            } else {
-              selSub.innerHTML = '<option value="">Selecione uma categoria primeiro</option>';
-            }
-          });
-
-          // Ao escolher subcategoria, reflete automaticamente no select de Disciplina
-          selSub.addEventListener('change', function() {
-            if ( this.value ) {
-              selDisc.value = this.value;
-            }
-          });
-        }
-      })();
-      </script>
-
-      <!-- Cards de Questão -->
+      <!-- Feed de Questões -->
       <section class="figma-cards-stack">
         <?php if ( $query_feed->have_posts() ) : ?>
           <?php while ( $query_feed->have_posts() ) : $query_feed->the_post();
@@ -740,16 +800,10 @@ $total_questoes = $query_feed->found_posts;
               if ( empty($terms) || is_wp_error($terms) ) {
                   $terms = get_the_terms( get_the_ID(), 'categoria_disciplina' );
               }
-              if ( ! empty($terms) && ! is_wp_error($terms) ) {
-                  $materia = $terms[0]->name;
-              } else {
-                  // Tenta ler o campo de categoria salvo via post meta (formulário de cadastro)
-                  $materia_meta = get_post_meta( get_the_ID(), 'assunto', true );
-                  $materia = ! empty($materia_meta) ? $materia_meta : 'Geral';
-              }
-            $enunciado_curto = wp_trim_words( get_field('enunciado') ?: get_the_content(), 22, '...' );
-            $autor           = get_the_author() ?: 'David';
-            $likes_ficticios = rand(8, 28);
+              $materia = ( ! empty($terms) && ! is_wp_error($terms) ) ? $terms[0]->name : ( get_post_meta( get_the_ID(), 'categoria', true ) ?: 'Engenharia de Software' );
+              $enunciado_curto = wp_trim_words( get_field('enunciado') ?: get_the_content(), 22, '...' );
+              $autor           = get_the_author() ?: 'Estudante UNILAB';
+              $likes_ficticios = rand(8, 28);
           ?>
             <article class="figma-card">
               <div class="figma-card-badges">
@@ -778,10 +832,7 @@ $total_questoes = $query_feed->found_posts;
                     <span><?php echo $likes_ficticios; ?></span>
                   </div>
                   <a href="<?php the_permalink(); ?>" class="figma-btn-resolver">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                      <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                     Resolver questão
                   </a>
                 </div>
@@ -790,36 +841,86 @@ $total_questoes = $query_feed->found_posts;
           <?php endwhile; wp_reset_postdata(); ?>
 
           <div class="figma-pagination-row">
-          <div class="figma-pagination-info">
-            Página <?php echo max( 1, get_query_var('paged') ); ?> de <?php echo $query_feed->max_num_pages; ?> (Total: <?php echo $total_questoes; ?> questões)
+            <div class="figma-pagination-info">
+              Página <?php echo max( 1, get_query_var('paged') ); ?> de <?php echo $query_feed->max_num_pages; ?> (Total: <?php echo $total_questoes; ?> questões)
+            </div>
+            <div class="figma-pagination-nav">
+              <?php
+              echo paginate_links( array(
+                  'total'     => $query_feed->max_num_pages,
+                  'current'   => max( 1, get_query_var('paged') ),
+                  'prev_text' => 'Anterior',
+                  'next_text' => 'Próxima',
+                  'class'     => 'figma-page-btn'
+              ) );
+              ?>
+            </div>
           </div>
-          <div class="figma-pagination-nav">
-            <?php
-            echo paginate_links( array(
-                'total'     => $query_feed->max_num_pages,
-                'current'   => max( 1, get_query_var('paged') ),
-                'prev_text' => 'Anterior',
-                'next_text' => 'Próxima',
-                'class'     => 'figma-page-btn' // Mantém o seu estilo visual
-            ) );
-            ?>
-          </div>
-</div>
 
         <?php else : ?>
-          <div class="figma-card" style="text-align:center; padding:45px 20px; color:#64748b;">
-            <p style="font-size:16px; font-weight:600; margin:0 0 8px 0; color:#0f284e;">Nenhuma questão encontrada</p>
+          <div class="figma-card" style="text-align:center; padding:50px 20px; color:#64748b;">
+            <p style="font-size:16px; font-weight:700; margin:0 0 8px 0; color:#102D5C;">Nenhuma questão encontrada</p>
             <p style="font-size:13px; margin:0;">Tente buscar com outros termos ou limpar os filtros da barra lateral.</p>
           </div>
         <?php endif; ?>
       </section>
 
     </div>
-
   </main>
 
+  <!-- Rodapé Figma -->
   <footer class="figma-footer">
-    Banco de Questões · Aprender em comunidade.
+    Banco de Questões · Aprender em comunidade · Universidade da Integração Internacional da Lusofonia Afro-Brasileira (UNILAB).
   </footer>
 
 </div>
+
+<script>
+(function() {
+  var mapa = {
+    'engenharia_software': [
+      { label: 'Engenharia de Software', slug: 'engenharia_software' },
+      { label: 'Algoritmos e Estruturas', slug: 'algoritmos' },
+      { label: 'Redes de Computadores', slug: 'redes' }
+    ],
+    'exatas': [
+      { label: 'Cálculo Diferencial', slug: 'calculo' }
+    ],
+    'humanidades': [
+      { label: 'Humanidades e Lusofonia', slug: 'humanidades' }
+    ]
+  };
+
+  var selCat  = document.getElementById('select-categoria');
+  var selSub  = document.getElementById('select-subcategoria');
+  var selDisc = document.getElementById('select-disciplina');
+
+  if ( selCat && selSub && selDisc ) {
+    selCat.addEventListener('change', function() {
+      var cat = this.value;
+      selSub.innerHTML = '<option value="">Todas as subcategorias</option>';
+
+      if ( mapa[cat] ) {
+        mapa[cat].forEach(function(item) {
+          var opt = document.createElement('option');
+          opt.value = item.slug;
+          opt.textContent = item.label;
+          selSub.appendChild(opt);
+        });
+      } else {
+        selSub.innerHTML = '<option value="">Selecione uma categoria primeiro</option>';
+      }
+    });
+
+    selSub.addEventListener('change', function() {
+      if ( this.value ) {
+        selDisc.value = this.value;
+      }
+    });
+  }
+})();
+</script>
+
+<?php wp_footer(); ?>
+</body>
+</html>

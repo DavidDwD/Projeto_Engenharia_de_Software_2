@@ -12,19 +12,20 @@ if ( is_user_logged_in() && ! isset( $_GET['preview_user'] ) ) {
 
 $erro_login = '';
 
-// Processamento do Login (RF01 / RF02 / RNF12)
+// Processamento de login nativo do WordPress
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit'] ) ) {
     $login_input = sanitize_text_field( $_POST['log'] ?? '' );
     $senha_input = $_POST['pwd'] ?? '';
-    $lembrar     = ! empty( $_POST['rememberme'] );
+    $lembrar     = isset( $_POST['rememberme'] );
 
     if ( empty( $login_input ) || empty( $senha_input ) ) {
-        $erro_login = 'Por favor, informe seu e-mail/usuário e senha para entrar.';
+        $erro_login = 'Por favor, informe seu e-mail institucional e senha.';
     } else {
+        // Suporte tanto a username quanto a e-mail institucional
         if ( is_email( $login_input ) ) {
-            $user_obj = get_user_by( 'email', $login_input );
-            if ( $user_obj ) {
-                $login_input = $user_obj->user_login;
+            $user = get_user_by( 'email', $login_input );
+            if ( $user ) {
+                $login_input = $user->user_login;
             }
         }
 
@@ -46,414 +47,522 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit
         }
     }
 }
-
-get_header();
 ?>
+<!DOCTYPE html>
+<html <?php language_attributes(); ?>>
+<head>
+  <meta charset="<?php bloginfo( 'charset' ); ?>">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acesso de Estudante — Banco de Questões UNILAB</title>
+  <?php wp_head(); ?>
+  <style>
+    /* RESET GLOBAL E TELA CHEIA DINÂMICA */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-height: 100vh !important;
+      background-color: #ffffff !important;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
+      color: #0f172a !important;
+      -webkit-font-smoothing: antialiased;
+      box-sizing: border-box !important;
+    }
 
-<style>
-  /* 1. OCULTA HEADER E FOOTER PADRÃO DO ASTRA */
-  .entry-title,
-  h1.entry-title,
-  .entry-header,
-  header.entry-header,
-  .ast-single-post-order,
-  .site-header,
-  .ast-desktop-header,
-  .ast-mobile-header,
-  .site-footer,
-  .ast-footer-overlay {
-    display: none !important;
-  }
+    *, *::before, *::after {
+      box-sizing: border-box !important;
+    }
 
-  html, body {
-    background-color: #ffffff !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
-    color: #0f172a !important;
-  }
-  .site-content, #content, .ast-container, #primary, #main, article, .entry-content {
-    max-width: 100% !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
+    .site-header, .site-footer, .ast-footer-overlay,
+    .ast-desktop-header, .ast-mobile-header,
+    .entry-header, .entry-title {
+      display: none !important;
+    }
 
-  /* LAYOUT DINÂMICO 100% SCREEN (SEM BORDAS BRANCAS VAZIAS) */
-  .unilab-login-wrapper {
-    width: 100%;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background: #ffffff;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  .unilab-login-wrapper *, .unilab-login-wrapper *::before, .unilab-login-wrapper *::after {
-    box-sizing: border-box;
-  }
-
-  /* CONTAINER CENTRAL SPLIT-SCREEN DINÂMICO QUE OCUPA TODA A LARGURA */
-  .figma-login-split-main {
-    display: flex;
-    flex: 1;
-    width: 100%;
-    min-height: calc(100vh - 65px);
-    margin: 0;
-    padding: 0;
-  }
-
-  /* COLUNA ESQUERDA: AZUL MARINHO (#102D5C) QUE PREENCHE ATÉ A BORDA */
-  .figma-login-left {
-    flex: 0 0 46%;
-    width: 46%;
-    min-width: 400px;
-    max-width: 650px;
-    background: #102d5c;
-    color: #ffffff;
-    padding: 56px 64px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .figma-login-brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-decoration: none;
-    color: #ffffff;
-  }
-  .figma-login-brand-icon {
-    width: 32px;
-    height: 32px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .figma-login-brand-text {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.2px;
-  }
-  .figma-left-tag {
-    font-size: 11px;
-    font-weight: 800;
-    color: #93c5fd;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    margin-bottom: 12px;
-  }
-  .figma-left-title {
-    font-size: 34px;
-    font-weight: 800;
-    line-height: 1.25;
-    color: #ffffff;
-    margin: 0 0 16px 0;
-    letter-spacing: -0.5px;
-  }
-  .figma-left-sub {
-    font-size: 14px;
-    color: #cbd5e1;
-    line-height: 1.6;
-    margin: 0;
-  }
-  .figma-left-foot {
-    font-size: 12px;
-    color: #94a3b8;
-  }
-
-  /* COLUNA DIREITA: BRANCA (#FFFFFF) COM FORMULÁRIO CENTRALIZADO */
-  .figma-login-right {
-    flex: 1;
-    background: #ffffff;
-    padding: 40px 60px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-  .figma-login-right-inner {
-    width: 100%;
-    max-width: 460px;
-  }
-
-  .figma-right-tag {
-    font-size: 11px;
-    font-weight: 800;
-    color: #2563eb;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .figma-right-title {
-    font-size: 32px;
-    font-weight: 800;
-    color: #0f284e;
-    margin: 0 0 6px 0;
-    letter-spacing: -0.5px;
-  }
-  .figma-right-sub {
-    font-size: 14px;
-    color: #64748b;
-    margin: 0 0 24px 0;
-  }
-
-  /* BOTÃO GOOGLE */
-  .btn-google-login {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    padding: 11px 16px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: #ffffff;
-    color: #1e293b;
-    font-weight: 700;
-    font-size: 14px;
-    text-decoration: none;
-    transition: all 0.15s ease;
-    cursor: pointer;
-  }
-  .btn-google-login:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
-  }
-
-  /* DIVISOR */
-  .figma-login-divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    margin: 20px 0;
-    color: #94a3b8;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .figma-login-divider::before,
-  .figma-login-divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  .figma-login-divider::before { margin-right: 12px; }
-  .figma-login-divider::after { margin-left: 12px; }
-
-  /* CAMPOS */
-  .figma-login-field {
-    margin-bottom: 18px;
-  }
-  .figma-login-label {
-    display: block;
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 6px;
-  }
-  .figma-login-label .obrigatorio {
-    color: #ef4444;
-  }
-  .figma-login-input {
-    width: 100%;
-    background: #ffffff;
-    border: 1.5px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 14px;
-    color: #0f172a;
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    font-family: inherit;
-  }
-  .figma-login-input:focus {
-    border-color: #102d5c;
-    box-shadow: 0 0 0 3px rgba(16, 45, 92, 0.1);
-  }
-  .figma-password-wrapper {
-    position: relative;
-  }
-  .figma-password-wrapper .figma-login-input {
-    padding-right: 42px;
-  }
-  .btn-toggle-senha {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #64748b;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-  }
-  .btn-toggle-senha:hover {
-    color: #0f284e;
-  }
-
-  /* LINHA DE CHECKBOX E ESQUECI SENHA */
-  .figma-login-options-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 22px;
-    font-size: 13px;
-  }
-  .figma-checkbox-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: #475569;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .figma-checkbox-label input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: #102d5c;
-  }
-  .link-esqueci-senha {
-    color: #102d5c;
-    font-weight: 700;
-    text-decoration: none;
-  }
-  .link-esqueci-senha:hover {
-    text-decoration: underline;
-  }
-
-  /* BOTÃO ENTRAR */
-  .btn-login-submit {
-    width: 100%;
-    background: #102d5c;
-    color: #ffffff;
-    border: none;
-    border-radius: 8px;
-    padding: 13px 20px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    transition: background 0.15s ease;
-  }
-  .btn-login-submit:hover {
-    background: #0a1f40;
-  }
-
-  /* RODAPÉ DO FORMULÁRIO */
-  .figma-login-bottom-link {
-    text-align: center;
-    margin-top: 24px;
-    font-size: 13px;
-    color: #64748b;
-  }
-  .figma-login-bottom-link a {
-    color: #102d5c;
-    font-weight: 700;
-    text-decoration: none;
-    margin-left: 4px;
-  }
-  .figma-login-bottom-link a:hover {
-    text-decoration: underline;
-  }
-
-  /* ALERTA DE ERRO */
-  .figma-login-error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 18px;
-  }
-
-  /* RODAPÉ GLOBAL */
-  .figma-footer {
-    width: 100%;
-    text-align: center;
-    padding: 22px 20px;
-    border-top: 1px solid #e2e8f0;
-    color: #94a3b8;
-    font-size: 12px;
-    background: #ffffff;
-  }
-
-  /* RESPONSIVIDADE MOBILE FIGMA (Login — Mobile.svg) */
-  @media (max-width: 860px) {
-    .figma-login-split-main {
+    .unilab-login-wrapper {
+      display: flex;
       flex-direction: column;
-      min-height: auto;
-    }
-    .figma-login-left {
+      min-height: 100vh;
       width: 100%;
-      min-width: 100%;
-      max-width: 100%;
-      padding: 36px 24px;
+      background-color: #ffffff;
     }
-    .figma-left-title {
-      font-size: 24px;
+
+    /* BARRA SUPERIOR INSTITUCIONAL FIGMA (35px) */
+    .figma-top-bar {
+      width: 100%;
+      height: 35px;
+      background-color: #102D5C;
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #b9cdf0;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      flex-shrink: 0;
     }
+
+    /* SPLIT SCREEN PRINCIPAL FLUIDO */
+    .figma-login-split-main {
+      display: flex;
+      flex-direction: row;
+      flex: 1;
+      width: 100%;
+      min-height: calc(100vh - 100px);
+    }
+
+    /* COLUNA ESQUERDA: INSTITUCIONAL AZUL MARINHO (#102D5C) */
+    .figma-login-left {
+      flex: 0 0 44%;
+      min-width: 420px;
+      max-width: 650px;
+      background-color: #102D5C;
+      color: #ffffff;
+      padding: 60px 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .figma-login-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #ffffff;
+    }
+
+    .figma-brand-icon-box {
+      width: 38px;
+      height: 38px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+    }
+
+    .figma-brand-name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: #ffffff;
+    }
+
+    .figma-login-hero-content {
+      margin: 40px 0;
+    }
+
+    .figma-hero-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #60a5fa;
+      background: rgba(96, 165, 250, 0.15);
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+
+    .figma-hero-title {
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 1.2;
+      color: #ffffff;
+      margin: 0 0 16px 0;
+      letter-spacing: -0.8px;
+    }
+
+    .figma-hero-desc {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin: 0 0 32px 0;
+    }
+
+    .figma-features-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .figma-feature-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+
+    .figma-feature-item svg {
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+
+    .figma-login-left-footer {
+      font-size: 12px;
+      color: #94a3b8;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 20px;
+    }
+
+    /* COLUNA DIREITA: FORMULÁRIO BRANCO (#FFFFFF) */
     .figma-login-right {
-      padding: 36px 20px;
+      flex: 1;
+      background-color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 40px;
     }
+
     .figma-login-right-inner {
-      max-width: 100%;
+      width: 100%;
+      max-width: 460px;
     }
-  }
-</style>
+
+    .figma-form-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #2563eb;
+      margin-bottom: 6px;
+    }
+
+    .figma-form-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin: 0 0 8px 0;
+    }
+
+    .figma-form-subtitle {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0 0 24px 0;
+      line-height: 1.45;
+    }
+
+    /* BOTÃO GOOGLE VISUAL FIGMA */
+    .btn-figma-google {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      height: 48px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn-figma-google:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    /* DIVISOR FIGMA */
+    .figma-login-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 22px 0;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .figma-login-divider::before,
+    .figma-login-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .figma-login-divider::before { margin-right: 14px; }
+    .figma-login-divider::after  { margin-left: 14px; }
+
+    /* MENSAGEM DE ERRO */
+    .figma-login-error {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* CAMPOS DE FORMULÁRIO */
+    .figma-login-field {
+      margin-bottom: 18px;
+    }
+
+    .figma-login-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    .figma-login-input {
+      width: 100%;
+      height: 48px;
+      padding: 0 16px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #0f172a;
+      background: #ffffff;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .figma-login-input:focus {
+      border-color: #102D5C;
+      box-shadow: 0 0 0 3px rgba(16, 45, 92, 0.12);
+    }
+
+    .figma-password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .figma-password-wrapper .figma-login-input {
+      padding-right: 48px;
+    }
+
+    .btn-toggle-senha {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+
+    .btn-toggle-senha:hover {
+      color: #334155;
+    }
+
+    /* LINHA DE OPÇÕES: LEMBRAR E ESQUECI SENHA */
+    .figma-login-options-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 18px 0 24px 0;
+      font-size: 13px;
+    }
+
+    .figma-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .figma-checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #102D5C;
+      cursor: pointer;
+    }
+
+    .link-esqueci-senha {
+      color: #102D5C;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .link-esqueci-senha:hover {
+      text-decoration: underline;
+    }
+
+    /* BOTÃO ENTRAR SUBMIT */
+    .btn-login-submit {
+      width: 100%;
+      height: 48px;
+      background-color: #102D5C;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn-login-submit:hover {
+      background-color: #0b1f3f;
+    }
+
+    .btn-login-submit:active {
+      transform: translateY(1px);
+    }
+
+    /* LINK PARA REGISTRO */
+    .figma-login-bottom-link {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .figma-login-bottom-link a {
+      color: #102D5C;
+      font-weight: 700;
+      text-decoration: none;
+      margin-left: 4px;
+    }
+
+    .figma-login-bottom-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* RODAPÉ ESTENDIDO */
+    .figma-footer {
+      width: 100%;
+      background-color: #ffffff;
+      border-top: 1px solid #e2e8f0;
+      padding: 20px 32px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+
+    /* RESPONSIVIDADE MOBILE (Login — Mobile.svg) */
+    @media (max-width: 860px) {
+      .figma-top-bar {
+        padding: 0 16px;
+        font-size: 10px;
+      }
+      .figma-login-split-main {
+        flex-direction: column;
+      }
+      .figma-login-left {
+        flex: none;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        padding: 36px 20px;
+      }
+      .figma-hero-title {
+        font-size: 26px;
+      }
+      .figma-hero-desc {
+        font-size: 13px;
+        margin-bottom: 20px;
+      }
+      .figma-login-right {
+        padding: 32px 20px 48px 20px;
+      }
+      .figma-form-title {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
 
 <div class="unilab-login-wrapper">
 
+  <!-- Faixa Institucional 35px -->
+  <div class="figma-top-bar">
+    Universidade da Integração Internacional da Lusofonia Afro-Brasileira · UNILAB
+  </div>
+
+  <!-- Layout Split Screen Fluido -->
   <div class="figma-login-split-main">
 
-    <!-- ======================================================== -->
-    <!-- COLUNA ESQUERDA: AZUL MARINHO FULL-HEIGHT FIGMA          -->
-    <!-- ======================================================== -->
+    <!-- LADO ESQUERDO: INSTITUCIONAL AZUL MARINHO (#102D5C) -->
     <div class="figma-login-left">
-      <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-login-brand">
-        <div class="figma-login-brand-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-          </svg>
-        </div>
-        <span class="figma-login-brand-text">Banco de Questões</span>
-      </a>
+      <div>
+        <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-login-brand">
+          <div class="figma-brand-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+          </div>
+          <span class="figma-brand-name">Banco de Questões</span>
+        </a>
 
-      <div style="margin: 40px 0;">
-        <div class="figma-left-tag">CONHECIMENTO QUE SE MULTIPLICA</div>
-        <h1 class="figma-left-title">Uma boa questão abre novos caminhos.</h1>
-        <p class="figma-left-sub">Explore, pratique e compartilhe questões com quem também acredita no aprendizado coletivo.</p>
+        <div class="figma-login-hero-content">
+          <span class="figma-hero-tag">Acesso Acadêmico</span>
+          <h1 class="figma-hero-title">Aprenda, pratique e evolua junto.</h1>
+          <p class="figma-hero-desc">
+            Acesse o banco de questões colaborativo da UNILAB. Exercite seus conhecimentos, resolva desafios acadêmicos e acompanhe seu progresso de aprendizagem.
+          </p>
+
+          <ul class="figma-features-list">
+            <li class="figma-feature-item">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Questões oficiais comentadas com gabarito dinâmico</span>
+            </li>
+            <li class="figma-feature-item">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Materiais de apoio com arquivos PDF e resoluções gráficas</span>
+            </li>
+            <li class="figma-feature-item">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Ambiente colaborativo para todos os cursos da universidade</span>
+            </li>
+          </ul>
+        </div>
       </div>
 
-      <div class="figma-left-foot">Um espaço acadêmico. Muitas formas de aprender.</div>
+      <div class="figma-login-left-footer">
+        © <?php echo date('Y'); ?> UNILAB · Pró-Reitoria de Graduação (PROGRAD).
+      </div>
     </div>
 
-    <!-- ======================================================== -->
-    <!-- COLUNA DIREITA: FORMULÁRIO BRANCO FULL-HEIGHT FIGMA      -->
-    <!-- ======================================================== -->
+    <!-- LADO DIREITO: FORMULÁRIO BRANCO -->
     <div class="figma-login-right">
       <div class="figma-login-right-inner">
-        <div class="figma-right-tag">SEU PRÓXIMO APRENDIZADO COMEÇA AQUI</div>
-        <h2 class="figma-right-title">Bom ter você de volta.</h2>
-        <p class="figma-right-sub">Entre para continuar seus estudos e compartilhar conhecimento.</p>
 
-        <!-- Botão Google Visual Oficial do Figma -->
-        <a href="#" onclick="alert('Integração com Google Workspace Institucional em breve.'); return false;" class="btn-google-login">
+        <div class="figma-form-kicker">Acesso ao Sistema</div>
+        <h2 class="figma-form-title">Entrar na sua conta</h2>
+        <p class="figma-form-subtitle">Digite seu e-mail institucional ou usuário acadêmico para continuar.</p>
+
+        <!-- Botão Google OAuth Visual -->
+        <a href="#" onclick="alert('Autenticação Google Workspace UNILAB disponível em breve.'); return false;" class="btn-figma-google">
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.15z"/>
             <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.28v3.15C3.26 21.36 7.33 24 12 24z"/>
@@ -467,7 +576,8 @@ get_header();
 
         <?php if ( ! empty( $erro_login ) ) : ?>
           <div class="figma-login-error">
-            <?php echo esc_html( $erro_login ); ?>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span><?php echo esc_html( $erro_login ); ?></span>
           </div>
         <?php endif; ?>
 
@@ -475,8 +585,8 @@ get_header();
           <input type="hidden" name="unilab_login_submit" value="1">
 
           <div class="figma-login-field">
-            <label class="figma-login-label" for="login_user">E-mail *</label>
-            <input type="text" id="login_user" name="log" class="figma-login-input" placeholder="ana.martins@universidade.edu.br" required autocomplete="username">
+            <label class="figma-login-label" for="login_user">E-mail ou Usuário *</label>
+            <input type="text" id="login_user" name="log" class="figma-login-input" placeholder="ana.martins@aluno.unilab.edu.br" required autocomplete="username">
           </div>
 
           <div class="figma-login-field">
@@ -497,7 +607,7 @@ get_header();
               <input type="checkbox" name="rememberme" value="forever">
               Manter conectado
             </label>
-            <a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" class="link-esqueci-senha">Esqueci minha senha</a>
+            <a href="<?php echo esc_url( home_url('/password-reset/') ); ?>" class="link-esqueci-senha">Esqueci minha senha</a>
           </div>
 
           <button type="submit" class="btn-login-submit">
@@ -510,7 +620,7 @@ get_header();
         </form>
 
         <div class="figma-login-bottom-link">
-          Ainda não tem uma conta? <a href="/cadastro/">Crie sua conta</a>
+          Ainda não tem uma conta? <a href="<?php echo esc_url( home_url('/cadastro/') ); ?>">Crie sua conta</a>
         </div>
       </div>
     </div>
@@ -519,7 +629,7 @@ get_header();
 
   <!-- Rodapé Oficial Figma -->
   <footer class="figma-footer">
-    Banco de Questões · Aprender em comunidade.
+    Banco de Questões · Aprender em comunidade · Universidade da Integração Internacional da Lusofonia Afro-Brasileira (UNILAB).
   </footer>
 
 </div>
@@ -541,5 +651,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<?php
-get_footer();
+<?php wp_footer(); ?>
+</body>
+</html>

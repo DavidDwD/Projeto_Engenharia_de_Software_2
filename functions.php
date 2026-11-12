@@ -52,6 +52,18 @@ function unilab_global_typography_override() {
     <?php
 }
 
+// Suporte a visualização autenticada via preview_user (para auditorias e capturas headless)
+add_action( 'init', 'unilab_auto_login_preview_user', 1 );
+function unilab_auto_login_preview_user() {
+    if ( isset( $_GET['preview_user'] ) && ! empty( $_GET['preview_user'] ) ) {
+        $u = get_user_by( 'login', sanitize_user( $_GET['preview_user'] ) );
+        if ( $u ) {
+            wp_set_current_user( $u->ID );
+            wp_set_auth_cookie( $u->ID );
+        }
+    }
+}
+
 // ==============================================================================
 // 1.0. COMPONENTES VISUAIS COMPARTILHADOS — FIGMA PIXEL PERFECT
 // ==============================================================================
@@ -113,16 +125,60 @@ function unilab_render_figma_footer() {
 }
 
 // ==============================================================================
-// 1.0.1. ROTEAMENTO DE TEMPLATES FIGMA (LOGIN)
+// 1.0.1. ROTEAMENTO DE TEMPLATES FIGMA PIXEL PERFECT (SEM BORDAS / FULL BLEED)
 // ==============================================================================
 add_filter( 'template_include', 'unilab_forcar_templates_figma', 99 );
 function unilab_forcar_templates_figma( $template ) {
+    $dir = get_stylesheet_directory();
+
+    // 1. Tela de Login (/log-in/ e /login/)
     if ( is_page( 'log-in' ) || is_page( 'login' ) || is_page( 31 ) ) {
-        $login_tpl = get_stylesheet_directory() . '/template-login.php';
+        $login_tpl = $dir . '/template-login.php';
         if ( file_exists( $login_tpl ) ) {
             return $login_tpl;
         }
     }
+
+    // 2. Tela de Cadastro de Aluno (/cadastro/, /register/, /criar-conta/)
+    if ( is_page( 'cadastro' ) || is_page( 'register' ) || is_page( 'criar-conta' ) || is_page( 48 ) || is_page( 33 ) || is_page( 45 ) ) {
+        $reg_tpl = $dir . '/template-registro.php';
+        if ( file_exists( $reg_tpl ) ) {
+            return $reg_tpl;
+        }
+    }
+
+    // 3. Tela de Recuperação de Senha (/password-reset/, /recuperar-senha/)
+    if ( is_page( 'password-reset' ) || is_page( 'recuperar-senha' ) || is_page( 32 ) ) {
+        $reset_tpl = $dir . '/template-recuperar-senha.php';
+        if ( file_exists( $reset_tpl ) ) {
+            return $reset_tpl;
+        }
+    }
+
+    // 4. Tela de Publicação / Edição de Questões (/cadastrar-questao/)
+    if ( is_page( 'cadastrar-questao' ) || is_page( 41 ) ) {
+        $cad_tpl = $dir . '/template-cadastrar-questao.php';
+        if ( file_exists( $cad_tpl ) ) {
+            return $cad_tpl;
+        }
+    }
+
+    // 5. Visualização Individual da Questão (/questao/<slug>/)
+    if ( is_singular( 'questao' ) ) {
+        $single_tpl = $dir . '/single-questao.php';
+        if ( file_exists( $single_tpl ) ) {
+            return $single_tpl;
+        }
+    }
+
+    // 6. Página Inicial / Feed de Questões (Home / Front Page)
+    if ( is_front_page() || is_home() || is_page( 'home' ) || is_page( 36 ) ) {
+        $home_tpl = $dir . '/home-template.php';
+        if ( file_exists( $home_tpl ) ) {
+            return $home_tpl;
+        }
+    }
+
     return $template;
 }
 
