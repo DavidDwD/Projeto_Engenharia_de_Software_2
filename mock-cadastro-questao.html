@@ -96,7 +96,7 @@
     <div id="resumo-erros" class="resumo-erros"></div>
     <div id="resumo-sucesso" class="resumo-sucesso"></div>
 
-    <form id="form-cadastro-questao" class="form-cadastro-questao" enctype="multipart/form-data">
+    <form id="form-cadastro-questao" class="form-cadastro-questao" method="POST" action="" enctype="multipart/form-data">
 
       <!-- RF11: Assunto -->
       <div class="campo-grupo">
@@ -178,7 +178,7 @@
       <!-- RF18 / RN03 / RN04: Anexo Imagens -->
       <div class="campo-grupo">
         <label for="anexo_imagens">Anexar Imagens / Gráficos <span class="opcional">(Até 3 arquivos JPG/PNG de até 5 MB cada)</span></label>
-        <input type="file" id="anexo_imagens" name="anexo_imagens" accept="image/jpeg,image/png" multiple>
+        <input type="file" id="anexo_imagens" name="anexo_imagens[]" accept="image/jpeg,image/png" multiple>
       </div>
 
       <!-- RF19 / RN05: Link Externo -->

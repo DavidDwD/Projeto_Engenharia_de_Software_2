@@ -69,14 +69,18 @@ function unilab_importar_questoes_seed() {
         update_post_meta( $post_id, 'resposta_correta', $item['resposta_correta'] );
         update_post_meta( $post_id, 'explicacao', $item['explicacao'] );
         update_post_meta( $post_id, 'link_externo', esc_url_raw( $item['link_externo'] ) );
+        update_post_meta( $post_id, 'categoria', $item['categoria'] );
 
-        // 3. Associação com a Taxonomia Categoria/Disciplina se estiver registrada
-        if ( taxonomy_exists( 'categoria_disciplina' ) && ! empty( $item['categoria'] ) ) {
-            wp_set_object_terms( $post_id, $item['categoria'], 'categoria_disciplina', true );
+        // 3. Associação com a Taxonomia Categoria/Disciplina (disciplina e categoria_disciplina)
+        if ( ! empty( $item['categoria'] ) ) {
+            wp_set_object_terms( $post_id, $item['categoria'], 'disciplina', false );
+            if ( taxonomy_exists( 'categoria_disciplina' ) ) {
+                wp_set_object_terms( $post_id, $item['categoria'], 'categoria_disciplina', false );
+            }
         }
 
         // 4. Associação de Tags se estiver registrada
-        if ( taxonomy_exists( 'tag_questao' ) && ! empty( $item['tags'] ) ) {
+        if ( ! empty( $item['tags'] ) ) {
             wp_set_object_terms( $post_id, $item['tags'], 'tag_questao', true );
         }
 

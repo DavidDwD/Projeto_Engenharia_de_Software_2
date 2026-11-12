@@ -32,8 +32,10 @@ function inicializarValidacaoCadastro() {
             evento.preventDefault();
             exibirErrosFormulario(formCadastro, erros);
         } else {
-            // Se estiver em ambiente mock de teste (sem action de backend definida), simula a confirmação
-            if (!formCadastro.getAttribute('action')) {
+            // Se estiver em ambiente mock de teste puro (sem POST nem action definida), simula a confirmação
+            const temAction = formCadastro.getAttribute('action') && formCadastro.getAttribute('action').length > 0;
+            const ehPost = formCadastro.getAttribute('method') && formCadastro.getAttribute('method').toUpperCase() === 'POST';
+            if (!temAction && !ehPost) {
                 evento.preventDefault();
                 exibirSucessoFormulario(formCadastro);
             } else {
@@ -147,7 +149,7 @@ function validarFormularioQuestao(form) {
         }
     }
 
-    const inputImagens = form.querySelector('[name="anexo_imagens"]');
+    const inputImagens = form.querySelector('#anexo_imagens') || form.querySelector('[name="anexo_imagens"]') || form.querySelector('[name="anexo_imagens[]"]');
     if (inputImagens && inputImagens.files && inputImagens.files.length > 0) {
         const limiteMaximoImg = 5 * 1024 * 1024; // 5 MB
         const formatosPermitidos = ['image/jpeg', 'image/png', 'image/jpg'];
@@ -205,7 +207,9 @@ function exibirErrosFormulario(form, erros) {
     }
 
     erros.forEach((erro) => {
-        const campoElemento = form.querySelector(`[name="${erro.campo}"]`);
+        const campoElemento = form.querySelector(`[name="${erro.campo}"]`) ||
+                              form.querySelector(`[name="${erro.campo}[]"]`) ||
+                              form.querySelector(`#${erro.campo}`);
         if (campoElemento) {
             campoElemento.classList.add('campo-invalido');
             campoElemento.style.borderColor = '#dc3545';
