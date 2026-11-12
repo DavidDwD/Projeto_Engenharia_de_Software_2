@@ -95,7 +95,7 @@ $total_questoes = $query_feed->found_posts;
 
   /* 3. ESCOPO GERAL */
   .figma-root-scope {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
     background-color: #f8fafc !important;
     color: #0f172a !important;
     width: 100% !important;

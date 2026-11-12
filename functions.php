@@ -8,11 +8,19 @@
  */
 
 // ==============================================================================
-// 1. CARREGAMENTO DE ASSETS (CSS & JAVASCRIPT)
+// 1. CARREGAMENTO DE ASSETS (CSS & JAVASCRIPT) & TIPOGRAFIA GLOBAL
 // ==============================================================================
 add_action( 'wp_enqueue_scripts', 'astra_child_enqueue_assets' );
 function astra_child_enqueue_assets() {
     wp_enqueue_style( 'astra-parent-style', get_template_directory_uri() . '/style.css' );
+
+    // Tipografia Oficial Figma (Inter Google Font)
+    wp_enqueue_style(
+        'google-font-inter',
+        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap',
+        array(),
+        null
+    );
 
     // Enfileira os scripts de resolução e validação do Assis
     wp_enqueue_script(
@@ -30,6 +38,18 @@ function astra_child_enqueue_assets() {
         '1.0.0',
         true
     );
+}
+
+// Injeção de estilo de tipografia global para garantir a mesma fonte em todo o sistema
+add_action( 'wp_head', 'unilab_global_typography_override', 999 );
+function unilab_global_typography_override() {
+    ?>
+    <style id="unilab-global-typography">
+      html, body, button, input, select, textarea, p, h1, h2, h3, h4, h5, h6, span, a, div, label {
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif !important;
+      }
+    </style>
+    <?php
 }
 
 // ==============================================================================
