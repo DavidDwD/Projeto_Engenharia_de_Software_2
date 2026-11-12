@@ -33,6 +33,66 @@ function astra_child_enqueue_assets() {
 }
 
 // ==============================================================================
+// 1.0. COMPONENTES VISUAIS COMPARTILHADOS — FIGMA PIXEL PERFECT
+// ==============================================================================
+function unilab_get_current_student_info() {
+    $esta_logado = is_user_logged_in();
+    $usuario_atual = wp_get_current_user();
+    $nome_aluno = $esta_logado ? ( $usuario_atual->display_name ?: $usuario_atual->user_login ) : 'Visitante';
+    $partes_nome = explode( ' ', trim( $nome_aluno ) );
+    $iniciais = 'UN';
+    if ( ! empty( $partes_nome[0] ) ) {
+        $iniciais = strtoupper( substr( $partes_nome[0], 0, 1 ) );
+        if ( count( $partes_nome ) > 1 ) {
+            $iniciais .= strtoupper( substr( end( $partes_nome ), 0, 1 ) );
+        }
+    }
+    return array(
+        'logado'    => $esta_logado,
+        'nome'      => $nome_aluno,
+        'iniciais'  => $iniciais,
+        'papel'     => $esta_logado ? 'Estudante' : 'Visitante'
+    );
+}
+
+function unilab_render_figma_navbar( $active = 'inicio' ) {
+    $info = unilab_get_current_student_info();
+    ?>
+    <header class="figma-navbar">
+      <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-navbar-brand">
+        <div class="figma-brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+        </div>
+        <span class="figma-brand-text">Banco de Questões</span>
+      </a>
+      <ul class="figma-nav-links">
+        <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo $active === 'inicio' ? 'active' : ''; ?>">Início</a></li>
+        <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $active === 'favoritos' ? 'active' : ''; ?>">Favoritos</a></li>
+        <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="<?php echo $active === 'cadastrar' ? 'active' : ''; ?>">Minhas questões</a></li>
+      </ul>
+      <div class="figma-nav-user">
+        <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
+        <div class="figma-user-meta">
+          <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
+          <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
+        </div>
+      </div>
+    </header>
+    <?php
+}
+
+function unilab_render_figma_footer() {
+    ?>
+    <footer class="figma-footer">
+      Banco de Questões · Aprender em comunidade.
+    </footer>
+    <?php
+}
+
+// ==============================================================================
 // 1.1. REGISTRO DE FALLBACK PARA CPT E TAXONOMIAS
 // ==============================================================================
 add_action( 'init', 'unilab_registrar_cpt_taxonomias_fallback', 5 );

@@ -440,6 +440,56 @@ $total_questoes = $query_feed->found_posts;
 
   /* RODAPÉ */
   .figma-footer { text-align: center !important; padding: 30px 20px !important; border-top: 1px solid #e2e8f0 !important; color: #94a3b8 !important; font-size: 12px !important; margin-top: 60px !important; }
+
+  /* RESPONSIVIDADE MOBILE FIGMA (Início e busca — Mobile.svg) */
+  @media (max-width: 860px) {
+    .figma-navbar {
+      padding: 12px 16px !important;
+    }
+    .figma-nav-links {
+      display: none !important;
+    }
+    .figma-hero-section {
+      padding: 32px 16px 28px 16px !important;
+    }
+    .figma-hero-title {
+      font-size: 24px !important;
+      line-height: 1.25 !important;
+    }
+    .figma-hero-subtitle {
+      font-size: 13px !important;
+    }
+    .figma-search-bar {
+      flex-direction: column !important;
+      padding: 10px !important;
+      border-radius: 12px !important;
+    }
+    .figma-search-input-box {
+      width: 100% !important;
+      margin-bottom: 8px !important;
+    }
+    .figma-btn-search {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+    .figma-main-layout {
+      flex-direction: column !important;
+      padding: 0 16px !important;
+      gap: 20px !important;
+    }
+    .figma-sidebar {
+      width: 100% !important;
+    }
+    .figma-section-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 12px !important;
+    }
+    .figma-btn-publicar {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
 </style>
 
 <div class="figma-root-scope">
