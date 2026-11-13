@@ -204,6 +204,17 @@ function unilab_forcar_templates_figma( $template ) {
         }
     }
 
+    // 7. Central de Moderação Admin (/central-de-moderacao/)
+    if ( is_page( 'central-de-moderacao' ) || is_page( 56 ) ) {
+        $mod_tpl = $dir . '/template-moderação.php';
+        if ( ! file_exists( $mod_tpl ) ) {
+            $mod_tpl = $dir . '/template-moderacao.php';
+        }
+        if ( file_exists( $mod_tpl ) ) {
+            return $mod_tpl;
+        }
+    }
+
     return $template;
 }
 
@@ -832,3 +843,61 @@ add_filter( 'login_redirect', function( $redirect_to, $request, $user ) {
     }
     return home_url( '/' );
 }, 10, 3 );
+
+// ==============================================================================
+// 8. BOOTSTRAP AUTOMÁTICO DE HOMOLOGAÇÃO / APRESENTAÇÃO
+// ==============================================================================
+add_action( 'init', 'unilab_garantir_configuracoes_apresentacao', 10 );
+function unilab_garantir_configuracoes_apresentacao() {
+    // 1. Garante que a página 'central-de-moderacao' existe e tem o template correto
+    $pagina_mod = get_page_by_path( 'central-de-moderacao' );
+    if ( ! $pagina_mod ) {
+        $mod_id = wp_insert_post( array(
+            'post_title'   => 'Central de Moderação',
+            'post_name'    => 'central-de-moderacao',
+            'post_status'  => 'publish',
+            'post_type'    => 'page',
+            'post_content' => ''
+        ) );
+        if ( $mod_id && ! is_wp_error( $mod_id ) ) {
+            update_post_meta( $mod_id, '_wp_page_template', 'template-moderação.php' );
+        }
+    } else {
+        update_post_meta( $pagina_mod->ID, '_wp_page_template', 'template-moderação.php' );
+    }
+
+    // 2. Garante usuário david com senha 12345 e papel administrator
+    $user_david = get_user_by( 'login', 'david' );
+    if ( ! $user_david ) {
+        $user_david = get_user_by( 'login', 'David' );
+    }
+    if ( ! $user_david ) {
+        $uid = wp_create_user( 'david', '12345', 'david@unilab.edu.br' );
+        if ( ! is_wp_error( $uid ) ) {
+            $u = new WP_User( $uid );
+            $u->set_role( 'administrator' );
+            wp_update_user( array( 'ID' => $uid, 'display_name' => 'David' ) );
+        }
+    } else {
+        wp_set_password( '12345', $user_david->ID );
+        if ( ! in_array( 'administrator', (array) $user_david->roles ) ) {
+            $user_david->set_role( 'administrator' );
+        }
+    }
+
+    // 3. Garante usuário admin_moderador com papel administrator
+    $user_admin = get_user_by( 'login', 'admin_moderador' );
+    if ( ! $user_admin ) {
+        $uid = wp_create_user( 'admin_moderador', '12345', 'admin@unilab.edu.br' );
+        if ( ! is_wp_error( $uid ) ) {
+            $u = new WP_User( $uid );
+            $u->set_role( 'administrator' );
+            wp_update_user( array( 'ID' => $uid, 'display_name' => 'admin_moderador' ) );
+        }
+    } else {
+        wp_set_password( '12345', $user_admin->ID );
+        if ( ! in_array( 'administrator', (array) $user_admin->roles ) ) {
+            $user_admin->set_role( 'administrator' );
+        }
+    }
+}
