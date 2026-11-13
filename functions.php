@@ -103,7 +103,7 @@ function unilab_render_figma_navbar( $active = 'inicio' ) {
       <ul class="figma-nav-links">
         <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo $active === 'inicio' ? 'active' : ''; ?>">Início</a></li>
         <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $active === 'favoritos' ? 'active' : ''; ?>">Favoritos</a></li>
-        <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="<?php echo $active === 'cadastrar' ? 'active' : ''; ?>">Minhas questões</a></li>
+        <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>" class="<?php echo $active === 'minhas' ? 'active' : ''; ?>">Minhas questões</a></li>
       </ul>
       <div class="figma-nav-user">
         <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
@@ -670,3 +670,78 @@ function unilab_login_page_shortcode() {
     return ob_get_clean();
 }
 add_shortcode( 'pagina_de_login', 'unilab_login_page_shortcode' );
+
+// ==============================================================================
+// 6. PROCESSAMENTO DE CURTIDAS E FAVORITOS (RF31, RF41, HU37)
+// ==============================================================================
+function unilab_processar_interacao_social() {
+    if ( ! is_user_logged_in() ) {
+        if ( wp_doing_ajax() ) {
+            wp_send_json_error( array( 'mensagem' => 'Você precisa estar logado para interagir.' ), 401 );
+        }
+        return;
+    }
+
+    $user_id = get_current_user_id();
+
+    // 1. Toggle de Curtidas (RF31 / HU37)
+    if ( isset( $_POST['unilab_acao_curtir'] ) || ( isset( $_POST['action'] ) && $_POST['action'] === 'unilab_toggle_curtida' ) ) {
+        $questao_id = isset( $_POST['questao_id'] ) ? intval( $_POST['questao_id'] ) : 0;
+        check_admin_referer( 'unilab_curtir_' . $questao_id, 'unilab_nonce' );
+
+        if ( $questao_id > 0 && get_post_type( $questao_id ) === 'questao' ) {
+            $curtidas_user = (array) get_user_meta( $user_id, '_unilab_curtidas_usuario', true );
+            $curtidas_total = intval( get_post_meta( $questao_id, '_unilab_curtidas_total', true ) );
+
+            if ( in_array( $questao_id, $curtidas_user ) ) {
+                $curtidas_user = array_diff( $curtidas_user, array( $questao_id ) );
+                $curtidas_total = max( 0, $curtidas_total - 1 );
+                $curtido = false;
+            } else {
+                $curtidas_user[] = $questao_id;
+                $curtidas_total++;
+                $curtido = true;
+            }
+
+            update_user_meta( $user_id, '_unilab_curtidas_usuario', array_values( array_unique( $curtidas_user ) ) );
+            update_post_meta( $questao_id, '_unilab_curtidas_total', $curtidas_total );
+
+            if ( wp_doing_ajax() ) {
+                wp_send_json_success( array( 'curtido' => $curtido, 'total' => $curtidas_total ) );
+            } else {
+                wp_safe_redirect( wp_get_referer() ?: get_permalink( $questao_id ) );
+                exit;
+            }
+        }
+    }
+
+    // 2. Toggle de Favoritos (RF41 / RF09 / HU32)
+    if ( isset( $_POST['unilab_acao_favoritar'] ) || ( isset( $_POST['action'] ) && $_POST['action'] === 'unilab_toggle_favorito' ) ) {
+        $questao_id = isset( $_POST['questao_id'] ) ? intval( $_POST['questao_id'] ) : 0;
+        check_admin_referer( 'unilab_favoritar_' . $questao_id, 'unilab_nonce' );
+
+        if ( $questao_id > 0 && get_post_type( $questao_id ) === 'questao' ) {
+            $favoritos = (array) get_user_meta( $user_id, '_unilab_favoritos', true );
+
+            if ( in_array( $questao_id, $favoritos ) ) {
+                $favoritos = array_diff( $favoritos, array( $questao_id ) );
+                $favoritado = false;
+            } else {
+                $favoritos[] = $questao_id;
+                $favoritado = true;
+            }
+
+            update_user_meta( $user_id, '_unilab_favoritos', array_values( array_unique( $favoritos ) ) );
+
+            if ( wp_doing_ajax() ) {
+                wp_send_json_success( array( 'favoritado' => $favoritado ) );
+            } else {
+                wp_safe_redirect( wp_get_referer() ?: get_permalink( $questao_id ) );
+                exit;
+            }
+        }
+    }
+}
+add_action( 'template_redirect', 'unilab_processar_interacao_social' );
+add_action( 'wp_ajax_unilab_toggle_curtida', 'unilab_processar_interacao_social' );
+add_action( 'wp_ajax_unilab_toggle_favorito', 'unilab_processar_interacao_social' );

@@ -42,6 +42,14 @@ if ( is_array( $imagens_anexadas ) ) {
 $pdf_url = get_post_meta( get_the_ID(), 'anexo_pdf', true );
 $pdf_nome = get_post_meta( get_the_ID(), 'anexo_pdf_nome', true ) ?: 'Material de Apoio (PDF)';
 $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || ( ! empty( $link_externo ) );
+
+// Interações Sociais (RF31, RF41)
+$curtidas_total    = intval( get_post_meta( get_the_ID(), '_unilab_curtidas_total', true ) );
+$curtidas_user     = is_user_logged_in() ? (array) get_user_meta( get_current_user_id(), '_unilab_curtidas_usuario', true ) : array();
+$usuario_curtiu    = in_array( get_the_ID(), $curtidas_user );
+
+$favoritos_user    = is_user_logged_in() ? (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true ) : array();
+$usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -810,7 +818,7 @@ $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || 
       <ul class="figma-nav-links">
         <li><a href="<?php echo esc_url( home_url('/') ); ?>">Início</a></li>
         <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>">Favoritos</a></li>
-        <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>">Minhas questões</a></li>
+        <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>">Minhas questões</a></li>
       </ul>
       <div class="figma-nav-user">
         <div class="figma-avatar-circle"><?php echo esc_html( $iniciais_autor ); ?></div>
@@ -920,6 +928,41 @@ $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || 
           </p>
           <div class="figma-referencia-nota">
             Referência conceitual: Banco de Questões Acadêmico — UNILAB. Síntese didática.
+          </div>
+        </div>
+
+        <!-- BARRA DE INTERAÇÕES SOCIAIS (RF31, RF41, HU32, HU37) -->
+        <div class="figma-social-bar" style="margin-top: 24px; padding-top: 18px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <!-- Botão Curtir (RF31 / HU37) -->
+            <form method="POST" action="" style="margin: 0; display: inline;">
+              <?php wp_nonce_field( 'unilab_curtir_' . get_the_ID(), 'unilab_nonce' ); ?>
+              <input type="hidden" name="unilab_acao_curtir" value="1">
+              <input type="hidden" name="questao_id" value="<?php the_ID(); ?>">
+              <button type="submit" id="btn-curtir-questao" class="btn-figma-social-like" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 1px solid <?php echo $usuario_curtiu ? '#ef4444' : '#cbd5e1'; ?>; background: <?php echo $usuario_curtiu ? '#fee2e2' : '#ffffff'; ?>; color: <?php echo $usuario_curtiu ? '#b91c1c' : '#475569'; ?>; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="<?php echo $usuario_curtiu ? '#ef4444' : 'none'; ?>" stroke="<?php echo $usuario_curtiu ? '#ef4444' : 'currentColor'; ?>" stroke-width="2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span id="label-curtidas-total"><?php echo $curtidas_total; ?> <?php echo $curtidas_total === 1 ? 'curtida' : 'curtidas'; ?></span>
+              </button>
+            </form>
+
+            <!-- Botão Favoritar / Salvar (RF41 / RF09 / HU32) -->
+            <form method="POST" action="" style="margin: 0; display: inline;">
+              <?php wp_nonce_field( 'unilab_favoritar_' . get_the_ID(), 'unilab_nonce' ); ?>
+              <input type="hidden" name="unilab_acao_favoritar" value="1">
+              <input type="hidden" name="questao_id" value="<?php the_ID(); ?>">
+              <button type="submit" id="btn-favoritar-questao" class="btn-figma-social-fav" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 1px solid <?php echo $usuario_favoritou ? '#f59e0b' : '#cbd5e1'; ?>; background: <?php echo $usuario_favoritou ? '#fef3c7' : '#ffffff'; ?>; color: <?php echo $usuario_favoritou ? '#b45309' : '#475569'; ?>; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="<?php echo $usuario_favoritou ? '#f59e0b' : 'none'; ?>" stroke="<?php echo $usuario_favoritou ? '#f59e0b' : 'currentColor'; ?>" stroke-width="2">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span id="label-favoritos-status"><?php echo $usuario_favoritou ? 'Salva nos favoritos' : 'Salvar nos favoritos'; ?></span>
+              </button>
+            </form>
+          </div>
+
+          <div style="font-size: 12px; color: #94a3b8;">
+            ID da questão: #<?php the_ID(); ?>
           </div>
         </div>
 

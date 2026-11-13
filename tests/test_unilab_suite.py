@@ -287,6 +287,108 @@ def main():
     pills_filtro = [p.text.strip() for p in soup_f.find_all("span", class_="figma-tag-pill")]
     print_sub("Tag discreta de disciplina ativa renderizada na UI", any("Disciplina" in p for p in pills_filtro))
 
+    # -------------------------------------------------------------
+    # 9. Publicação com 2 Alternativas (RF14 - Fase 2 / Correção do Bug)
+    # -------------------------------------------------------------
+    print_step("9. Publicação de Questão com 2 Alternativas (A e B) (RF14 - Fase 2)")
+    dados_2alt = {
+        "assunto": "Conceitos de Teste Unitário Automatizado",
+        "categoria": "engenharia_software",
+        "enunciado": "Em engenharia de software, testes de unidade devem validar o comportamento de funções isoladas sem dependências externas reais.",
+        "alternativa_a": "Verdadeiro (isolamento por mocks/stubs).",
+        "alternativa_b": "Falso (devem obrigatoriamente conectar no banco de dados real em produção).",
+        "resposta_correta": "A",
+        "explicacao": "Testes unitários operam com isolamento para garantir execução rápida, idempotente e determinística.",
+        "link_externo": "https://pt.wikipedia.org/wiki/Teste_unit%C3%A1rio"
+    }
+
+    resp_pub2 = sessao_autor.post(
+        f"{BASE_URL}/cadastrar-questao/",
+        data=dados_2alt,
+        allow_redirects=True
+    )
+    print_sub("Publicação com apenas 2 alternativas respondeu HTTP 200", resp_pub2.status_code == 200)
+    print_sub("Mensagem de sucesso encontrada para questão de 2 alternativas", "Questão publicada com sucesso!" in resp_pub2.text)
+
+    soup_pub2 = BeautifulSoup(resp_pub2.text, "html.parser")
+    link_ver2 = soup_pub2.find("a", string=re.compile("Ver Questão"))
+    url_q2 = link_ver2["href"] if link_ver2 else ""
+
+    resp_view2 = sessao_autor.get(url_q2)
+    soup_view2 = BeautifulSoup(resp_view2.text, "html.parser")
+    alts_rendered = soup_view2.find_all("div", class_="alternativa")
+    print_sub("Apenas 2 alternativas (A e B) são renderizadas na visualização pública", len(alts_rendered) == 2)
+
+    # -------------------------------------------------------------
+    # 10. Interações Sociais: Curtidas e Favoritos (RF31, RF41, HU32, HU37)
+    # -------------------------------------------------------------
+    print_step("10. Interações Sociais: Curtidas e Favoritos (RF31, RF41, HU32, HU37)")
+    # Curtir a questão via POST
+    form_curtir = soup_view2.find("button", id="btn-curtir-questao")
+    form_c_parent = form_curtir.find_parent("form") if form_curtir else None
+    id_q2 = int(form_c_parent.find("input", attrs={"name": "questao_id"})["value"]) if form_c_parent and form_c_parent.find("input", attrs={"name": "questao_id"}) else 0
+    nonce_c_val = form_c_parent.find("input", attrs={"name": "unilab_nonce"})["value"] if form_c_parent and form_c_parent.find("input", attrs={"name": "unilab_nonce"}) else ""
+
+    resp_like = sessao_autor.post(
+        url_q2,
+        data={
+            "unilab_acao_curtir": "1",
+            "questao_id": id_q2,
+            "unilab_nonce": nonce_c_val
+        },
+        allow_redirects=True
+    )
+    print_sub("Ação de curtir executada com sucesso (HTTP 200)", resp_like.status_code == 200)
+    soup_like = BeautifulSoup(resp_like.text, "html.parser")
+    label_likes = soup_like.find("span", id="label-curtidas-total")
+    print_sub("Contador de curtidas atualizado para 1 curtida", label_likes is not None and "1" in label_likes.text)
+
+    # Favoritar a questão via POST
+    form_fav = soup_view2.find("button", id="btn-favoritar-questao")
+    form_f_parent = form_fav.find_parent("form") if form_fav else None
+    nonce_f_val = form_f_parent.find("input", attrs={"name": "unilab_nonce"})["value"] if form_f_parent and form_f_parent.find("input", attrs={"name": "unilab_nonce"}) else ""
+
+    resp_fav = sessao_autor.post(
+        url_q2,
+        data={
+            "unilab_acao_favoritar": "1",
+            "questao_id": id_q2,
+            "unilab_nonce": nonce_f_val
+        },
+        allow_redirects=True
+    )
+    print_sub("Ação de favoritar executada com sucesso (HTTP 200)", resp_fav.status_code == 200)
+    soup_fav = BeautifulSoup(resp_fav.text, "html.parser")
+    label_fav = soup_fav.find("span", id="label-favoritos-status")
+    print_sub("Status atualizado para 'Salva nos favoritos'", label_fav is not None and "Salva" in label_fav.text)
+
+    # -------------------------------------------------------------
+    # 11. Filtros de Navegação na Home (RF08, RF09)
+    # -------------------------------------------------------------
+    print_step("11. Filtros de Navegação na Home (Minhas Questões e Favoritos)")
+    # Teste de "Minhas questões"
+    resp_minhas = sessao_autor.get(f"{BASE_URL}/?minhas=1")
+    print_sub("Acesso ao filtro /?minhas=1 respondeu HTTP 200 (RF08)", resp_minhas.status_code == 200)
+    print_sub("Questão criada pelo autor encontrada em 'Minhas questões'", "Conceitos de Teste Unitário" in resp_minhas.text)
+
+    # Teste de "Favoritos"
+    resp_favs = sessao_autor.get(f"{BASE_URL}/?favoritos=1")
+    print_sub("Acesso ao filtro /?favoritos=1 respondeu HTTP 200 (RF09)", resp_favs.status_code == 200)
+    print_sub("Questão favoritada encontrada no feed de favoritos", "Conceitos de Teste Unitário" in resp_favs.text)
+
+    # Limpeza final: exclui a questão de teste 2
+    if id_q2 > 0 and url_q2:
+        form_del2 = soup_view2.find("form", id="form-excluir-questao") or soup_view2.find("input", attrs={"name": "unilab_nonce"})
+        nonce_del2 = soup_view2.find("input", attrs={"name": "unilab_nonce"})["value"] if soup_view2.find("input", attrs={"name": "unilab_nonce"}) else ""
+        sessao_autor.post(
+            url_q2,
+            data={
+                "unilab_acao_excluir": "1",
+                "questao_id": id_q2,
+                "unilab_nonce": nonce_del2
+            }
+        )
+
     print("\n" + "=" * 70)
     print("🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!")
     print("=" * 70)
