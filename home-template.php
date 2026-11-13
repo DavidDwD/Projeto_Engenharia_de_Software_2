@@ -1,4 +1,4 @@
-﻿<?php
+﻿﻿﻿<?php
 /**
  * Template Name: Início e Busca Figma (Pixel Perfect - Dynamic Fullscreen)
  * Banco de Questões — UNILAB
@@ -10,10 +10,13 @@ $esta_logado   = is_user_logged_in();
 $nome_aluno    = $esta_logado ? ($usuario_atual->first_name ?: $usuario_atual->display_name) : 'Estudante';
 $iniciais      = $esta_logado ? strtoupper( substr( trim($nome_aluno), 0, 2 ) ) : 'UN';
 
-// 2. Parâmetros de Filtro e Busca (RF25, RF26, RF27)
-$termo_busca = isset($_GET['busca_q']) ? sanitize_text_field($_GET['busca_q']) : '';
-$filtro_disc = isset($_GET['filtro_disc']) ? sanitize_text_field($_GET['filtro_disc']) : '';
-$paged       = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : ( ( get_query_var( 'page' ) ) ? get_query_var( 'page' ) : 1 );
+// 2. Parâmetros de Filtro e Busca (RF25, RF26, RF27, RF08, RF09, RF31)
+$termo_busca      = isset($_GET['busca_q']) ? sanitize_text_field($_GET['busca_q']) : '';
+$filtro_disc      = isset($_GET['filtro_disc']) ? sanitize_text_field($_GET['filtro_disc']) : '';
+$filtro_minhas    = ! empty($_GET['minhas']);
+$filtro_favoritos = ! empty($_GET['favoritos']);
+$ordenar          = isset($_GET['ordenar']) ? sanitize_text_field($_GET['ordenar']) : '';
+$paged            = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : ( ( get_query_var( 'page' ) ) ? get_query_var( 'page' ) : 1 );
 
 // URL base da página atual (sem query string)
 $url_pagina_atual = strtok( $_SERVER['REQUEST_URI'], '?' );
@@ -26,6 +29,39 @@ $args = array(
     'orderby'        => 'date',
     'order'          => 'DESC'
 );
+
+$titulo_filtro_especial = '';
+
+// Ordenação pelas mais bem avaliadas / curtidas (RF31 / HU23)
+if ( $ordenar === 'curtidas' ) {
+    $args['meta_key'] = '_unilab_curtidas_total';
+    $args['orderby']  = 'meta_value_num';
+    $args['order']    = 'DESC';
+}
+
+// Filtro "Minhas Questões" (RF08 / HU08)
+if ( $filtro_minhas ) {
+    if ( $esta_logado ) {
+        $args['author'] = get_current_user_id();
+        $titulo_filtro_especial = 'Minhas Questões Publicadas';
+    } else {
+        $args['author'] = -1;
+        $titulo_filtro_especial = 'Minhas Questões (requer login)';
+    }
+}
+
+// Filtro "Favoritos" (RF09 / RF41 / HU09)
+if ( $filtro_favoritos ) {
+    if ( $esta_logado ) {
+        $fav_ids = (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true );
+        $fav_ids = array_values( array_filter( array_map( 'intval', $fav_ids ) ) );
+        $args['post__in'] = ! empty( $fav_ids ) ? $fav_ids : array( 0 );
+        $titulo_filtro_especial = 'Minhas Questões Favoritas';
+    } else {
+        $args['post__in'] = array( 0 );
+        $titulo_filtro_especial = 'Questões Favoritas (requer login)';
+    }
+}
 
 if ( ! empty($termo_busca) ) {
     $args['s'] = $termo_busca;
@@ -199,6 +235,26 @@ $total_questoes = $query_feed->found_posts;
     .figma-user-meta { line-height: 1.25; text-align: left; }
     .figma-user-name { font-size: 13px; font-weight: 700; color: #102D5C; }
     .figma-user-role { font-size: 11px; color: #64748b; }
+
+    .figma-btn-logout {
+      font-size: 11px;
+      font-weight: 700;
+      color: #b91c1c;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: 0.2s;
+    }
+    .figma-btn-logout:hover {
+      background: #fee2e2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
 
     /* HERO BANNER FLUIDO (Figma fill #EAF0FC) */
     .figma-hero-banner {
@@ -668,16 +724,32 @@ $total_questoes = $query_feed->found_posts;
       <span class="figma-brand-text">Banco de Questões</span>
     </a>
     <ul class="figma-nav-links">
-      <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="active">Início</a></li>
-      <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>">Favoritos</a></li>
-      <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>">Minhas questões</a></li>
+      <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo (! $filtro_favoritos && ! $filtro_minhas) ? 'active' : ''; ?>">Início</a></li>
+      <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $filtro_favoritos ? 'active' : ''; ?>">Favoritos</a></li>
+      <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>" class="<?php echo $filtro_minhas ? 'active' : ''; ?>">Minhas questões</a></li>
     </ul>
     <div class="figma-nav-user">
+      <?php if ( current_user_can( 'manage_options' ) ) : ?>
+        <a href="<?php echo esc_url( home_url('/central-de-moderacao/') ); ?>" style="font-size:11px; font-weight:700; color:#fff; background:#102D5C; padding:5px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:5px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg>
+          Moderação
+        </a>
+      <?php endif; ?>
       <div class="figma-avatar-circle"><?php echo esc_html( $iniciais ); ?></div>
       <div class="figma-user-meta">
         <div class="figma-user-name"><?php echo esc_html( $nome_aluno ); ?></div>
         <div class="figma-user-role"><?php echo $esta_logado ? 'Estudante' : 'Visitante'; ?></div>
       </div>
+      <?php if ( $esta_logado ) : ?>
+        <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Sair
+        </a>
+      <?php else : ?>
+        <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" class="figma-btn-logout" style="color:#102D5C; background:#e2e8f0; border-color:#cbd5e1;">
+          Entrar
+        </a>
+      <?php endif; ?>
     </div>
   </header>
 
@@ -794,6 +866,31 @@ $total_questoes = $query_feed->found_posts;
 
       <!-- Feed de Questões -->
       <section class="figma-cards-stack">
+
+        <!-- Barra de Status do Filtro e Ordenação (RF29, RF31) -->
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+          <div style="font-size:14px; color:#475569; font-weight:600;">
+            <?php if ( ! empty($titulo_filtro_especial) ) : ?>
+              <span style="background:#dbeafe; color:#1e40af; padding:5px 12px; border-radius:14px; font-size:13px; display:inline-flex; align-items:center; gap:6px;">
+                📌 <?php echo esc_html($titulo_filtro_especial); ?>
+                <a href="<?php echo esc_url( home_url('/') ); ?>" style="color:#1e40af; text-decoration:none; font-weight:bold; margin-left:4px;" title="Remover filtro">✕</a>
+              </span>
+            <?php elseif ( ! empty($termo_busca) ) : ?>
+              Resultados para: <em>"<?php echo esc_html($termo_busca); ?>"</em>
+            <?php elseif ( ! empty($filtro_disc_nome) ) : ?>
+              Disciplina: <strong><?php echo esc_html($filtro_disc_nome); ?></strong>
+            <?php else : ?>
+              Todas as questões publicadas
+            <?php endif; ?>
+          </div>
+          <div style="font-size:13px; color:#64748b; display:flex; align-items:center; gap:8px;">
+            <span>Ordenar:</span>
+            <a href="<?php echo esc_url( add_query_arg('ordenar', 'recentes') ); ?>" style="color:<?php echo $ordenar !== 'curtidas' ? '#102D5C' : '#64748b'; ?>; font-weight:<?php echo $ordenar !== 'curtidas' ? '700' : '500'; ?>; text-decoration:none;">Mais recentes</a>
+            <span>·</span>
+            <a href="<?php echo esc_url( add_query_arg('ordenar', 'curtidas') ); ?>" style="color:<?php echo $ordenar === 'curtidas' ? '#102D5C' : '#64748b'; ?>; font-weight:<?php echo $ordenar === 'curtidas' ? '700' : '500'; ?>; text-decoration:none;">Mais curtidas</a>
+          </div>
+        </div>
+
         <?php if ( $query_feed->have_posts() ) : ?>
           <?php while ( $query_feed->have_posts() ) : $query_feed->the_post();
               $terms = get_the_terms( get_the_ID(), 'disciplina' );
@@ -803,12 +900,16 @@ $total_questoes = $query_feed->found_posts;
               $materia = ( ! empty($terms) && ! is_wp_error($terms) ) ? $terms[0]->name : ( get_post_meta( get_the_ID(), 'categoria', true ) ?: 'Engenharia de Software' );
               $enunciado_curto = wp_trim_words( get_field('enunciado') ?: get_the_content(), 22, '...' );
               $autor           = get_the_author() ?: 'Estudante UNILAB';
-              $likes_ficticios = rand(8, 28);
+              $likes_total     = intval( get_post_meta( get_the_ID(), '_unilab_curtidas_total', true ) );
+              $esta_favoritado = $esta_logado && in_array( get_the_ID(), (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true ) );
           ?>
             <article class="figma-card">
               <div class="figma-card-badges">
                 <span class="badge-primary"><?php echo esc_html( $materia ); ?></span>
                 <span class="badge-secondary">Múltipla escolha</span>
+                <?php if ( $esta_favoritado ) : ?>
+                  <span class="badge-secondary" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">⭐ Salva</span>
+                <?php endif; ?>
                 <?php if ( is_user_logged_in() && ( intval(get_the_author_meta('ID')) === get_current_user_id() || current_user_can('edit_post', get_the_ID()) ) ) : ?>
                   <a href="<?php echo esc_url( home_url('/cadastrar-questao/?editar=' . get_the_ID()) ); ?>" style="margin-left:auto; font-size:12px; font-weight:600; color:#0284c7; text-decoration:none; background:#e0f2fe; padding:3px 10px; border-radius:12px; display:inline-flex; align-items:center; gap:4px;">
                     ✏️ Editar minha questão
@@ -825,11 +926,11 @@ $total_questoes = $query_feed->found_posts;
                   <div class="figma-meta-sub"><?php echo esc_html( $materia ); ?> · Múltipla escolha</div>
                 </div>
                 <div class="figma-meta-right">
-                  <div class="figma-like-counter">
+                  <div class="figma-like-counter" title="Total de curtidas desta questão">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                     </svg>
-                    <span><?php echo $likes_ficticios; ?></span>
+                    <span><?php echo $likes_total; ?></span>
                   </div>
                   <a href="<?php the_permalink(); ?>" class="figma-btn-resolver">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
@@ -859,8 +960,33 @@ $total_questoes = $query_feed->found_posts;
 
         <?php else : ?>
           <div class="figma-card" style="text-align:center; padding:50px 20px; color:#64748b;">
-            <p style="font-size:16px; font-weight:700; margin:0 0 8px 0; color:#102D5C;">Nenhuma questão encontrada</p>
-            <p style="font-size:13px; margin:0;">Tente buscar com outros termos ou limpar os filtros da barra lateral.</p>
+            <p style="font-size:16px; font-weight:700; margin:0 0 8px 0; color:#102D5C;">
+              <?php 
+              if ( $filtro_favoritos ) {
+                  echo 'Nenhuma questão favoritada ainda';
+              } elseif ( $filtro_minhas ) {
+                  echo 'Você ainda não publicou nenhuma questão';
+              } else {
+                  echo 'Nenhuma questão encontrada';
+              }
+              ?>
+            </p>
+            <p style="font-size:13px; margin:0 0 16px 0;">
+              <?php 
+              if ( $filtro_favoritos ) {
+                  echo 'Explore o banco de questões e clique em "Salvar nos favoritos" em qualquer questão para revisá-la aqui.';
+              } elseif ( $filtro_minhas ) {
+                  echo 'Compartilhe seus conhecimentos com a comunidade acadêmica da UNILAB publicando sua primeira questão.';
+              } else {
+                  echo 'Tente buscar com outros termos ou limpar os filtros da barra lateral.';
+              }
+              ?>
+            </p>
+            <?php if ( $filtro_minhas ) : ?>
+              <a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="figma-btn-filtrar" style="display:inline-block; max-width:200px; text-decoration:none;">Publicar Questão</a>
+            <?php else : ?>
+              <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-btn-limpar" style="display:inline-block; max-width:180px; text-decoration:none;">Ver Todas as Questões</a>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
       </section>

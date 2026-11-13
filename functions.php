@@ -64,6 +64,15 @@ function unilab_auto_login_preview_user() {
     }
 }
 
+// Oculta a barra de administração do WordPress no frontend para estudantes/não-administradores
+add_filter( 'show_admin_bar', 'unilab_ocultar_admin_bar_estudantes', 999 );
+function unilab_ocultar_admin_bar_estudantes( $show ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return false;
+    }
+    return $show;
+}
+
 // ==============================================================================
 // 1.0. COMPONENTES VISUAIS COMPARTILHADOS — FIGMA PIXEL PERFECT
 // ==============================================================================
@@ -103,14 +112,30 @@ function unilab_render_figma_navbar( $active = 'inicio' ) {
       <ul class="figma-nav-links">
         <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo $active === 'inicio' ? 'active' : ''; ?>">Início</a></li>
         <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $active === 'favoritos' ? 'active' : ''; ?>">Favoritos</a></li>
-        <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="<?php echo $active === 'cadastrar' ? 'active' : ''; ?>">Minhas questões</a></li>
+        <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>" class="<?php echo $active === 'minhas' ? 'active' : ''; ?>">Minhas questões</a></li>
       </ul>
       <div class="figma-nav-user">
+        <?php if ( current_user_can( 'manage_options' ) ) : ?>
+          <a href="<?php echo esc_url( home_url('/central-de-moderacao/') ); ?>" style="font-size:11px; font-weight:700; color:#fff; background:#102D5C; padding:5px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:5px; margin-right:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/></svg>
+            Moderação
+          </a>
+        <?php endif; ?>
         <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
         <div class="figma-user-meta">
           <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
           <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
         </div>
+        <?php if ( is_user_logged_in() ) : ?>
+          <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão" style="font-size:11px; font-weight:700; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:4px 10px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-left:8px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sair
+          </a>
+        <?php else : ?>
+          <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" class="figma-btn-logout" style="font-size:11px; font-weight:700; color:#102D5C; background:#e2e8f0; border:1px solid #cbd5e1; padding:4px 10px; border-radius:6px; text-decoration:none; margin-left:8px;">
+            Entrar
+          </a>
+        <?php endif; ?>
       </div>
     </header>
     <?php
@@ -670,3 +695,140 @@ function unilab_login_page_shortcode() {
     return ob_get_clean();
 }
 add_shortcode( 'pagina_de_login', 'unilab_login_page_shortcode' );
+
+// ==============================================================================
+// 6. PROCESSAMENTO DE CURTIDAS E FAVORITOS (RF31, RF41, HU37)
+// ==============================================================================
+function unilab_processar_interacao_social() {
+    if ( ! is_user_logged_in() ) {
+        if ( wp_doing_ajax() ) {
+            wp_send_json_error( array( 'mensagem' => 'Você precisa estar logado para interagir.' ), 401 );
+        }
+        return;
+    }
+
+    $user_id = get_current_user_id();
+
+    // 1. Toggle de Curtidas (RF31 / HU37)
+    if ( isset( $_POST['unilab_acao_curtir'] ) || ( isset( $_POST['action'] ) && $_POST['action'] === 'unilab_toggle_curtida' ) ) {
+        $questao_id = isset( $_POST['questao_id'] ) ? intval( $_POST['questao_id'] ) : 0;
+        check_admin_referer( 'unilab_curtir_' . $questao_id, 'unilab_nonce' );
+
+        if ( $questao_id > 0 && get_post_type( $questao_id ) === 'questao' ) {
+            $curtidas_user = (array) get_user_meta( $user_id, '_unilab_curtidas_usuario', true );
+            $curtidas_total = intval( get_post_meta( $questao_id, '_unilab_curtidas_total', true ) );
+
+            if ( in_array( $questao_id, $curtidas_user ) ) {
+                $curtidas_user = array_diff( $curtidas_user, array( $questao_id ) );
+                $curtidas_total = max( 0, $curtidas_total - 1 );
+                $curtido = false;
+            } else {
+                $curtidas_user[] = $questao_id;
+                $curtidas_total++;
+                $curtido = true;
+            }
+
+            update_user_meta( $user_id, '_unilab_curtidas_usuario', array_values( array_unique( $curtidas_user ) ) );
+            update_post_meta( $questao_id, '_unilab_curtidas_total', $curtidas_total );
+
+            if ( wp_doing_ajax() ) {
+                wp_send_json_success( array( 'curtido' => $curtido, 'total' => $curtidas_total ) );
+            } else {
+                wp_safe_redirect( wp_get_referer() ?: get_permalink( $questao_id ) );
+                exit;
+            }
+        }
+    }
+
+    // 2. Toggle de Favoritos (RF41 / RF09 / HU32)
+    if ( isset( $_POST['unilab_acao_favoritar'] ) || ( isset( $_POST['action'] ) && $_POST['action'] === 'unilab_toggle_favorito' ) ) {
+        $questao_id = isset( $_POST['questao_id'] ) ? intval( $_POST['questao_id'] ) : 0;
+        check_admin_referer( 'unilab_favoritar_' . $questao_id, 'unilab_nonce' );
+
+        if ( $questao_id > 0 && get_post_type( $questao_id ) === 'questao' ) {
+            $favoritos = (array) get_user_meta( $user_id, '_unilab_favoritos', true );
+
+            if ( in_array( $questao_id, $favoritos ) ) {
+                $favoritos = array_diff( $favoritos, array( $questao_id ) );
+                $favoritado = false;
+            } else {
+                $favoritos[] = $questao_id;
+                $favoritado = true;
+            }
+
+            update_user_meta( $user_id, '_unilab_favoritos', array_values( array_unique( $favoritos ) ) );
+
+            if ( wp_doing_ajax() ) {
+                wp_send_json_success( array( 'favoritado' => $favoritado ) );
+            } else {
+                wp_safe_redirect( wp_get_referer() ?: get_permalink( $questao_id ) );
+                exit;
+            }
+        }
+    }
+}
+add_action( 'template_redirect', 'unilab_processar_interacao_social' );
+add_action( 'wp_ajax_unilab_toggle_curtida', 'unilab_processar_interacao_social' );
+add_action( 'wp_ajax_unilab_toggle_favorito', 'unilab_processar_interacao_social' );
+
+// ==============================================================================
+// 7. SISTEMA DE DENÚNCIAS — CPT E PROCESSAMENTO (RF-MODERAÇÃO)
+// ==============================================================================
+
+// 7.1 Registra o post type de denúncias
+add_action( 'init', function() {
+    register_post_type( 'denuncia', array(
+        'labels'       => array( 'name' => 'Denúncias', 'singular_name' => 'Denúncia' ),
+        'public'       => false,
+        'show_ui'      => true,
+        'show_in_menu' => false,
+        'supports'     => array( 'title' )
+    ));
+});
+
+// 7.2 Recebe o envio da denúncia do aluno e salva no banco
+add_action( 'admin_post_enviar_denuncia', 'unilab_processar_denuncia' );
+add_action( 'admin_post_nopriv_enviar_denuncia', 'unilab_processar_denuncia' );
+
+function unilab_processar_denuncia() {
+    if ( ! isset( $_POST['denuncia_nonce'] ) || ! wp_verify_nonce( $_POST['denuncia_nonce'], 'enviar_denuncia_action' ) ) {
+        wp_die( 'Ação não permitida.' );
+    }
+
+    $id_questao = isset( $_POST['id_questao'] ) ? intval( $_POST['id_questao'] ) : 0;
+    $motivo     = isset( $_POST['motivo'] ) ? sanitize_text_field( $_POST['motivo'] ) : 'Outro';
+    $detalhes   = isset( $_POST['detalhes'] ) ? sanitize_textarea_field( $_POST['detalhes'] ) : '';
+    $aluno_nome = is_user_logged_in() ? wp_get_current_user()->display_name : 'Estudante Anônimo';
+
+    if ( $id_questao > 0 ) {
+        $prioridade = ( $motivo === 'Conteúdo ofensivo' || $motivo === 'Informação perigosa' ) ? 'Alta' : 'Média';
+
+        $denuncia_id = wp_insert_post( array(
+            'post_type'   => 'denuncia',
+            'post_title'  => 'Denúncia - Questão #' . $id_questao . ' (' . $motivo . ')',
+            'post_status' => 'publish'
+        ));
+
+        if ( $denuncia_id && ! is_wp_error( $denuncia_id ) ) {
+            update_post_meta( $denuncia_id, 'id_questao', $id_questao );
+            update_post_meta( $denuncia_id, 'motivo', $motivo );
+            update_post_meta( $denuncia_id, 'detalhes', $detalhes );
+            update_post_meta( $denuncia_id, 'aluno_denunciante', $aluno_nome );
+            update_post_meta( $denuncia_id, 'prioridade', $prioridade );
+        }
+    }
+
+    $redirect_url = add_query_arg( 'denuncia', 'sucesso', get_permalink( $id_questao ) );
+    wp_redirect( $redirect_url );
+    exit;
+}
+
+// Admin → Moderação | Aluno → Home
+add_filter( 'login_redirect', function( $redirect_to, $request, $user ) {
+    if ( isset( $user->roles ) && is_array( $user->roles ) ) {
+        if ( in_array( 'administrator', $user->roles ) || in_array( 'editor', $user->roles ) ) {
+            return home_url( '/central-de-moderacao/' );
+        }
+    }
+    return home_url( '/' );
+}, 10, 3 );

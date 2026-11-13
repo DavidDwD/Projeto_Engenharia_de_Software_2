@@ -4,11 +4,12 @@
  * Banco de Questões — UNILAB
  */
 
-// Se já estiver logado, redireciona para a home
-if ( is_user_logged_in() && ! isset( $_GET['preview_user'] ) ) {
+// Se já estiver logado (e não for admin), redireciona para a home
+if ( is_user_logged_in() && ! isset( $_GET['preview_user'] ) && ! current_user_can( 'manage_options' ) ) {
     wp_redirect( home_url('/') );
     exit;
 }
+$admin_visualizando = is_user_logged_in() && current_user_can( 'manage_options' );
 
 $erro_login = '';
 
@@ -42,7 +43,11 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit
         } else {
             wp_set_current_user( $user_signon->ID );
             wp_set_auth_cookie( $user_signon->ID, $lembrar );
-            wp_redirect( home_url('/') );
+            if ( in_array( 'administrator', (array) $user_signon->roles ) || in_array( 'editor', (array) $user_signon->roles ) ) {
+                wp_redirect( home_url( '/central-de-moderacao/' ) );
+            } else {
+                wp_redirect( home_url( '/' ) );
+            }
             exit;
         }
     }
@@ -508,6 +513,13 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit
     Universidade da Integração Internacional da Lusofonia Afro-Brasileira · UNILAB
   </div>
 
+  <?php if ( $admin_visualizando ) : ?>
+  <div style="width:100%; background:#fffbeb; border-bottom:1px solid #fde68a; padding:10px 32px; display:flex; align-items:center; justify-content:space-between; font-size:13px; font-family:sans-serif;">
+    <span style="color:#92400e; font-weight:600;">👁️ Você está visualizando a página de login como Administrador.</span>
+    <a href="<?php echo esc_url( home_url('/central-de-moderacao/') ); ?>" style="background:#102D5C; color:#fff; padding:6px 16px; border-radius:6px; text-decoration:none; font-weight:700; font-size:12px;">← Voltar à Moderação</a>
+  </div>
+  <?php endif; ?>
+
   <!-- Layout Split Screen Fluido -->
   <div class="figma-login-split-main">
 
@@ -560,19 +572,6 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit
         <div class="figma-form-kicker">Acesso ao Sistema</div>
         <h2 class="figma-form-title">Entrar na sua conta</h2>
         <p class="figma-form-subtitle">Digite seu e-mail institucional ou usuário acadêmico para continuar.</p>
-
-        <!-- Botão Google OAuth Visual -->
-        <a href="#" onclick="alert('Autenticação Google Workspace UNILAB disponível em breve.'); return false;" class="btn-figma-google">
-          <svg width="18" height="18" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.15z"/>
-            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.28v3.15C3.26 21.36 7.33 24 12 24z"/>
-            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.28C.46 8.21 0 10.05 0 12s.46 3.79 1.28 5.42l4-3.15z"/>
-            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.28 6.58l4 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-          </svg>
-          Continuar com Conta Google
-        </a>
-
-        <div class="figma-login-divider">ou use seu e-mail</div>
 
         <?php if ( ! empty( $erro_login ) ) : ?>
           <div class="figma-login-error">
