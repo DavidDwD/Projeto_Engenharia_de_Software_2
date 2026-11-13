@@ -64,6 +64,15 @@ function unilab_auto_login_preview_user() {
     }
 }
 
+// Oculta a barra de administração do WordPress no frontend para estudantes/não-administradores
+add_filter( 'show_admin_bar', 'unilab_ocultar_admin_bar_estudantes', 999 );
+function unilab_ocultar_admin_bar_estudantes( $show ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return false;
+    }
+    return $show;
+}
+
 // ==============================================================================
 // 1.0. COMPONENTES VISUAIS COMPARTILHADOS — FIGMA PIXEL PERFECT
 // ==============================================================================
