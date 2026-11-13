@@ -236,6 +236,26 @@ $total_questoes = $query_feed->found_posts;
     .figma-user-name { font-size: 13px; font-weight: 700; color: #102D5C; }
     .figma-user-role { font-size: 11px; color: #64748b; }
 
+    .figma-btn-logout {
+      font-size: 11px;
+      font-weight: 700;
+      color: #b91c1c;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: 0.2s;
+    }
+    .figma-btn-logout:hover {
+      background: #fee2e2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
+
     /* HERO BANNER FLUIDO (Figma fill #EAF0FC) */
     .figma-hero-banner {
       width: 100%;
@@ -714,6 +734,16 @@ $total_questoes = $query_feed->found_posts;
         <div class="figma-user-name"><?php echo esc_html( $nome_aluno ); ?></div>
         <div class="figma-user-role"><?php echo $esta_logado ? 'Estudante' : 'Visitante'; ?></div>
       </div>
+      <?php if ( $esta_logado ) : ?>
+        <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Sair
+        </a>
+      <?php else : ?>
+        <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" class="figma-btn-logout" style="color:#102D5C; background:#e2e8f0; border-color:#cbd5e1;">
+          Entrar
+        </a>
+      <?php endif; ?>
     </div>
   </header>
 
