@@ -42,6 +42,14 @@ if ( is_array( $imagens_anexadas ) ) {
 $pdf_url = get_post_meta( get_the_ID(), 'anexo_pdf', true );
 $pdf_nome = get_post_meta( get_the_ID(), 'anexo_pdf_nome', true ) ?: 'Material de Apoio (PDF)';
 $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || ( ! empty( $link_externo ) );
+
+// Interações Sociais (RF31, RF41)
+$curtidas_total    = intval( get_post_meta( get_the_ID(), '_unilab_curtidas_total', true ) );
+$curtidas_user     = is_user_logged_in() ? (array) get_user_meta( get_current_user_id(), '_unilab_curtidas_usuario', true ) : array();
+$usuario_curtiu    = in_array( get_the_ID(), $curtidas_user );
+
+$favoritos_user    = is_user_logged_in() ? (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true ) : array();
+$usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -810,7 +818,7 @@ $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || 
       <ul class="figma-nav-links">
         <li><a href="<?php echo esc_url( home_url('/') ); ?>">Início</a></li>
         <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>">Favoritos</a></li>
-        <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>">Minhas questões</a></li>
+        <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>">Minhas questões</a></li>
       </ul>
       <div class="figma-nav-user">
         <div class="figma-avatar-circle"><?php echo esc_html( $iniciais_autor ); ?></div>
@@ -818,6 +826,16 @@ $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || 
           <div class="figma-user-name"><?php echo esc_html( $nome_autor ); ?></div>
           <div class="figma-user-role">Estudante</div>
         </div>
+        <?php if ( is_user_logged_in() ) : ?>
+          <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão" style="font-size:11px; font-weight:700; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:4px 10px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-left:8px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sair
+          </a>
+        <?php else : ?>
+          <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" class="figma-btn-logout" style="font-size:11px; font-weight:700; color:#102D5C; background:#e2e8f0; border:1px solid #cbd5e1; padding:4px 10px; border-radius:6px; text-decoration:none; margin-left:8px;">
+            Entrar
+          </a>
+        <?php endif; ?>
       </div>
     </header>
   <?php } ?>
@@ -922,6 +940,92 @@ $tem_materiais = ( ! empty( $imagens_anexadas ) ) || ( ! empty( $pdf_url ) ) || 
             Referência conceitual: Banco de Questões Acadêmico — UNILAB. Síntese didática.
           </div>
         </div>
+
+        <!-- BARRA DE INTERAÇÕES SOCIAIS (RF31, RF41, HU32, HU37) -->
+        <div class="figma-social-bar" style="margin-top: 24px; padding-top: 18px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <!-- Botão Curtir (RF31 / HU37) -->
+            <form method="POST" action="" style="margin: 0; display: inline;">
+              <?php wp_nonce_field( 'unilab_curtir_' . get_the_ID(), 'unilab_nonce' ); ?>
+              <input type="hidden" name="unilab_acao_curtir" value="1">
+              <input type="hidden" name="questao_id" value="<?php the_ID(); ?>">
+              <button type="submit" id="btn-curtir-questao" class="btn-figma-social-like" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 1px solid <?php echo $usuario_curtiu ? '#ef4444' : '#cbd5e1'; ?>; background: <?php echo $usuario_curtiu ? '#fee2e2' : '#ffffff'; ?>; color: <?php echo $usuario_curtiu ? '#b91c1c' : '#475569'; ?>; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="<?php echo $usuario_curtiu ? '#ef4444' : 'none'; ?>" stroke="<?php echo $usuario_curtiu ? '#ef4444' : 'currentColor'; ?>" stroke-width="2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span id="label-curtidas-total"><?php echo $curtidas_total; ?> <?php echo $curtidas_total === 1 ? 'curtida' : 'curtidas'; ?></span>
+              </button>
+            </form>
+
+            <!-- Botão Favoritar / Salvar (RF41 / RF09 / HU32) -->
+            <form method="POST" action="" style="margin: 0; display: inline;">
+              <?php wp_nonce_field( 'unilab_favoritar_' . get_the_ID(), 'unilab_nonce' ); ?>
+              <input type="hidden" name="unilab_acao_favoritar" value="1">
+              <input type="hidden" name="questao_id" value="<?php the_ID(); ?>">
+              <button type="submit" id="btn-favoritar-questao" class="btn-figma-social-fav" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; border: 1px solid <?php echo $usuario_favoritou ? '#f59e0b' : '#cbd5e1'; ?>; background: <?php echo $usuario_favoritou ? '#fef3c7' : '#ffffff'; ?>; color: <?php echo $usuario_favoritou ? '#b45309' : '#475569'; ?>; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="<?php echo $usuario_favoritou ? '#f59e0b' : 'none'; ?>" stroke="<?php echo $usuario_favoritou ? '#f59e0b' : 'currentColor'; ?>" stroke-width="2">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span id="label-favoritos-status"><?php echo $usuario_favoritou ? 'Salva nos favoritos' : 'Salvar nos favoritos'; ?></span>
+              </button>
+            </form>
+          </div>
+
+          <div style="font-size: 12px; color: #94a3b8;">
+            ID da questão: #<?php the_ID(); ?>
+          </div>
+        </div>
+
+        <!-- BOTÃO DE DENÚNCIA (MODERAÇÃO) -->
+        <?php if ( is_user_logged_in() ) : ?>
+          <?php if ( isset($_GET['denuncia']) && $_GET['denuncia'] === 'sucesso' ) : ?>
+            <div style="background:#e6f4ea; color:#137333; padding:10px 16px; border-radius:8px; margin-top:12px; font-size:14px; font-weight:600;">
+              ✓ Denúncia enviada para a moderação com sucesso!
+            </div>
+          <?php endif; ?>
+
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e2e8f0;">
+            <button type="button" onclick="document.getElementById('modalDenuncia').style.display='flex'" style="background:none; border:1px solid #fecaca; border-radius:20px; padding:7px 14px; font-size:13px; color:#b91c1c; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+              Denunciar questão
+            </button>
+          </div>
+
+          <!-- Modal de Denúncia -->
+          <div id="modalDenuncia" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+            <div style="background:#fff; border-radius:12px; max-width:480px; width:100%; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.2); font-family:sans-serif;">
+              <h3 style="margin:0 0 8px 0; color:#102D5C;">Denunciar Questão</h3>
+              <p style="margin:0 0 16px 0; font-size:13px; color:#64748b;">Ajude a manter a qualidade acadêmica do banco de questões.</p>
+              
+              <form action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" method="POST">
+                <?php wp_nonce_field( 'enviar_denuncia_action', 'denuncia_nonce' ); ?>
+                <input type="hidden" name="action" value="enviar_denuncia">
+                <input type="hidden" name="id_questao" value="<?php echo get_the_ID(); ?>">
+
+                <div style="margin-bottom:14px;">
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:#334155;">Motivo da denúncia:</label>
+                  <select name="motivo" required style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px;">
+                    <option value="Gabarito errado">Gabarito errado</option>
+                    <option value="Enunciado incompleto">Enunciado incompleto</option>
+                    <option value="Conteúdo ofensivo">Conteúdo ofensivo</option>
+                    <option value="Spam ou Duplicada">Spam ou Duplicada</option>
+                    <option value="Informação perigosa">Informação perigosa</option>
+                  </select>
+                </div>
+
+                <div style="margin-bottom:16px;">
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:#334155;">Detalhes ou justificativa:</label>
+                  <textarea name="detalhes" rows="3" placeholder="Explique brevemente o problema..." required style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; box-sizing:border-box; font-family:inherit;"></textarea>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                  <button type="button" onclick="document.getElementById('modalDenuncia').style.display='none'" style="background:#f1f5f9; border:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">Cancelar</button>
+                  <button type="submit" style="background:#dc2626; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">Enviar Denúncia</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        <?php endif; ?>
 
       </div>
 

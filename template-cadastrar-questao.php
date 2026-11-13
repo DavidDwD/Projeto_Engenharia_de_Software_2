@@ -9,7 +9,7 @@ $esta_logado = is_user_logged_in();
 $mensagem_sucesso = '';
 $mensagem_erro    = '';
 $id_edicao = isset( $_GET['editar'] ) ? intval( $_GET['editar'] ) : 0;
-$dados_preenchidos = null;
+$dados_preenchidos = array();
 $permissao_negada = false;
 
 // 1. Verificação de permissão para modo de edição (RF34)
@@ -48,36 +48,76 @@ if ( $id_edicao > 0 ) {
 }
 
 // 2. Processamento do envio do formulário (Criação RF10 ou Edição RF34)
-if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST' && ! empty( $_POST['assunto'] ) ) {
-    $assunto   = sanitize_text_field( $_POST['assunto'] );
-    $enunciado = wp_kses_post( $_POST['enunciado'] );
+if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST' ) {
+    $assunto   = sanitize_text_field( $_POST['assunto'] ?? '' );
+    $enunciado = wp_kses_post( $_POST['enunciado'] ?? '' );
+    $alt_a     = sanitize_text_field( $_POST['alternativa_a'] ?? '' );
+    $alt_b     = sanitize_text_field( $_POST['alternativa_b'] ?? '' );
+    $alt_c     = sanitize_text_field( $_POST['alternativa_c'] ?? '' );
+    $alt_d     = sanitize_text_field( $_POST['alternativa_d'] ?? '' );
+    $alt_e     = sanitize_text_field( $_POST['alternativa_e'] ?? '' );
+    $gabarito  = strtoupper( trim( sanitize_text_field( $_POST['resposta_correta'] ?? '' ) ) );
+    $explicacao = sanitize_textarea_field( $_POST['explicacao'] ?? '' );
+    $categoria = sanitize_text_field( $_POST['categoria'] ?? '' );
     $id_post_salvar = isset( $_POST['id_questao_edicao'] ) ? intval( $_POST['id_questao_edicao'] ) : 0;
 
-    if ( $id_post_salvar > 0 ) {
-        // Fluxo de Atualização (RF34)
-        $post_atualizar = get_post( $id_post_salvar );
-        if ( $post_atualizar && ( intval( $post_atualizar->post_author ) === get_current_user_id() || current_user_can( 'edit_post', $id_post_salvar ) ) ) {
-            wp_update_post( array(
-                'ID'           => $id_post_salvar,
+    // Preservar dados preenchidos no formulário
+    $dados_preenchidos = array_merge( $dados_preenchidos, array(
+        'assunto'          => $assunto,
+        'enunciado'        => $enunciado,
+        'categoria'        => $categoria,
+        'alternativa_a'    => $alt_a,
+        'alternativa_b'    => $alt_b,
+        'alternativa_c'    => $alt_c,
+        'alternativa_d'    => $alt_d,
+        'alternativa_e'    => $alt_e,
+        'resposta_correta' => $gabarito,
+        'explicacao'       => $explicacao,
+        'link_externo'     => esc_url_raw( $_POST['link_externo'] ?? '' ),
+    ) );
+
+    // Validação estrita de regras de negócio no servidor (RN08 / RF11-RF15)
+    $alts_map = array('A' => $alt_a, 'B' => $alt_b, 'C' => $alt_c, 'D' => $alt_d, 'E' => $alt_e);
+    if ( empty( $assunto ) ) {
+        $mensagem_erro = 'Por favor, informe o assunto da questão (RF11).';
+    } elseif ( empty( $enunciado ) ) {
+        $mensagem_erro = 'Por favor, informe o enunciado da questão (RF12).';
+    } elseif ( empty( $alt_a ) || empty( $alt_b ) ) {
+        $mensagem_erro = 'A questão requer no mínimo as alternativas A e B preenchidas (RN08 / RF14).';
+    } elseif ( empty( $gabarito ) ) {
+        $mensagem_erro = 'Por favor, selecione qual alternativa é a resposta correta (RF14).';
+    } elseif ( empty( $alts_map[$gabarito] ) ) {
+        $mensagem_erro = "A alternativa ({$gabarito}) foi selecionada como resposta correta, mas não foi preenchida.";
+    } elseif ( empty( $explicacao ) ) {
+        $mensagem_erro = 'A explicação teórica da resposta correta é obrigatória (RN08 / RF13).';
+    } elseif ( empty( $categoria ) ) {
+        $mensagem_erro = 'Selecione uma disciplina para a questão (RF15).';
+    } else {
+        if ( $id_post_salvar > 0 ) {
+            // Fluxo de Atualização (RF34)
+            $post_atualizar = get_post( $id_post_salvar );
+            if ( $post_atualizar && ( intval( $post_atualizar->post_author ) === get_current_user_id() || current_user_can( 'edit_post', $id_post_salvar ) ) ) {
+                wp_update_post( array(
+                    'ID'           => $id_post_salvar,
+                    'post_title'   => $assunto,
+                    'post_content' => $enunciado,
+                ) );
+                $post_id = $id_post_salvar;
+                $mensagem_sucesso = '🎉 Questão atualizada com sucesso pelo autor!';
+            } else {
+                $permissao_negada = true;
+            }
+        } else {
+            // Fluxo de Criação (RF10)
+            $post_id = wp_insert_post( array(
                 'post_title'   => $assunto,
                 'post_content' => $enunciado,
+                'post_type'    => 'questao',
+                'post_status'  => 'publish',
+                'post_author'  => get_current_user_id(),
             ) );
-            $post_id = $id_post_salvar;
-            $mensagem_sucesso = '🎉 Questão atualizada com sucesso pelo autor!';
-        } else {
-            $permissao_negada = true;
+            $mensagem_sucesso = '🎉 Questão publicada com sucesso!';
         }
-    } else {
-        // Fluxo de Criação (RF10)
-        $post_id = wp_insert_post( array(
-            'post_title'   => $assunto,
-            'post_content' => $enunciado,
-            'post_type'    => 'questao',
-            'post_status'  => 'publish',
-            'post_author'  => get_current_user_id(),
-        ) );
-        $mensagem_sucesso = '🎉 Questão publicada com sucesso!';
-    }
 
     if ( ! empty( $post_id ) && ! is_wp_error( $post_id ) && ! $permissao_negada ) {
         update_post_meta( $post_id, 'assunto', $assunto );
@@ -204,6 +244,7 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         }
 
         $link_sucesso_questao = get_permalink( $post_id );
+    }
     }
 }
 
@@ -705,7 +746,7 @@ if ( $id_edicao > 0 && ! $permissao_negada ) {
         <ul class="figma-nav-links">
           <li><a href="<?php echo esc_url( home_url('/') ); ?>">Início</a></li>
           <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>">Favoritos</a></li>
-          <li><a href="<?php echo esc_url( home_url('/cadastrar-questao/') ); ?>" class="active">Minhas questões</a></li>
+          <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>">Minhas questões</a></li>
         </ul>
         <div class="figma-nav-user">
           <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
@@ -713,6 +754,16 @@ if ( $id_edicao > 0 && ! $permissao_negada ) {
             <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
             <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
           </div>
+          <?php if ( is_user_logged_in() ) : ?>
+            <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão" style="font-size:11px; font-weight:700; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:4px 10px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-left:8px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Sair
+            </a>
+          <?php else : ?>
+            <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" class="figma-btn-logout" style="font-size:11px; font-weight:700; color:#102D5C; background:#e2e8f0; border:1px solid #cbd5e1; padding:4px 10px; border-radius:6px; text-decoration:none; margin-left:8px;">
+              Entrar
+            </a>
+          <?php endif; ?>
         </div>
       </header>
   <?php } ?>
@@ -815,32 +866,32 @@ if ( $id_edicao > 0 && ! $permissao_negada ) {
           <!-- SEÇÃO 2: ALTERNATIVAS E GABARITO -->
           <div class="figma-card-section">
             <h3 class="figma-section-title">2. Alternativas e Gabarito</h3>
-            <p class="figma-section-subtitle">Preencha as 5 alternativas de múltipla escolha e indique qual é a resposta correta.</p>
+            <p class="figma-section-subtitle">Preencha de 2 a 5 alternativas de múltipla escolha (A e B são obrigatórias; C, D e E são opcionais) e selecione o gabarito oficial.</p>
 
             <div class="figma-alternativas-stack">
               <div class="figma-alternativa-row">
                 <span class="figma-alt-badge">A</span>
-                <input type="text" name="alternativa_a" class="figma-input" placeholder="Texto da alternativa A" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_a'] ?? '' ); ?>">
+                <input type="text" name="alternativa_a" class="figma-input" placeholder="Texto da alternativa A (obrigatória)" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_a'] ?? '' ); ?>">
               </div>
 
               <div class="figma-alternativa-row">
                 <span class="figma-alt-badge">B</span>
-                <input type="text" name="alternativa_b" class="figma-input" placeholder="Texto da alternativa B" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_b'] ?? '' ); ?>">
+                <input type="text" name="alternativa_b" class="figma-input" placeholder="Texto da alternativa B (obrigatória)" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_b'] ?? '' ); ?>">
               </div>
 
               <div class="figma-alternativa-row">
                 <span class="figma-alt-badge">C</span>
-                <input type="text" name="alternativa_c" class="figma-input" placeholder="Texto da alternativa C" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_c'] ?? '' ); ?>">
+                <input type="text" name="alternativa_c" class="figma-input" placeholder="Texto da alternativa C (opcional)" value="<?php echo esc_attr( $dados_preenchidos['alternativa_c'] ?? '' ); ?>">
               </div>
 
               <div class="figma-alternativa-row">
                 <span class="figma-alt-badge">D</span>
-                <input type="text" name="alternativa_d" class="figma-input" placeholder="Texto da alternativa D" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_d'] ?? '' ); ?>">
+                <input type="text" name="alternativa_d" class="figma-input" placeholder="Texto da alternativa D (opcional)" value="<?php echo esc_attr( $dados_preenchidos['alternativa_d'] ?? '' ); ?>">
               </div>
 
               <div class="figma-alternativa-row">
                 <span class="figma-alt-badge">E</span>
-                <input type="text" name="alternativa_e" class="figma-input" placeholder="Texto da alternativa E" required value="<?php echo esc_attr( $dados_preenchidos['alternativa_e'] ?? '' ); ?>">
+                <input type="text" name="alternativa_e" class="figma-input" placeholder="Texto da alternativa E (opcional)" value="<?php echo esc_attr( $dados_preenchidos['alternativa_e'] ?? '' ); ?>">
               </div>
             </div>
 
