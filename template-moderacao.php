@@ -15,58 +15,83 @@ if ( ! current_user_can( 'manage_options' ) ) {
     );
 }
 
-// 2. BUSCA AS DENÚNCIAS REAIS SALVAS NO BANCO
+// 2. BUSCA AS DENÚNCIAS REAIS SALVAS NO BANCO (Pendentes + Histórico)
 $posts_denuncias = get_posts( array(
     'post_type'      => 'denuncia',
-    'posts_per_page' => 50,
+    'posts_per_page' => 100,
     'post_status'    => 'publish',
     'orderby'        => 'date',
+    'order'          => 'DESC'
+));
+
+$posts_historico = get_posts( array(
+    'post_type'      => 'denuncia',
+    'posts_per_page' => 50,
+    'post_status'    => 'private',
+    'orderby'        => 'modified',
     'order'          => 'DESC'
 ));
 
 $items_reais = array();
 
 foreach ( $posts_denuncias as $d ) {
-    $id_questao  = get_post_meta( $d->ID, 'id_questao', true );
-    $motivo      = get_post_meta( $d->ID, 'motivo', true ) ?: 'Informação perigosa';
+    $id_questao  = intval( get_post_meta( $d->ID, 'id_questao', true ) );
+    $motivo      = get_post_meta( $d->ID, 'motivo', true ) ?: 'Outro';
     $detalhes    = get_post_meta( $d->ID, 'detalhes', true ) ?: 'Sem detalhes adicionais informados.';
     $aluno_nome  = get_post_meta( $d->ID, 'aluno_denunciante', true ) ?: 'Estudante Anônimo';
     $prioridade  = get_post_meta( $d->ID, 'prioridade', true ) ?: 'Média';
-    
-    // Pega o texto e autor da questão original
-    $questao_post  = get_post( $id_questao );
-    $texto_questao = $questao_post ? wp_trim_words( $questao_post->post_content ?: $questao_post->post_title, 20, '...' ) : 'Questão não encontrada';
-    $autor_questao = $questao_post ? get_the_author_meta( 'display_name', $questao_post->post_author ) : 'Autor';
+
+    // Pega o texto, link e autor da questão original
+    $questao_post  = $id_questao > 0 ? get_post( $id_questao ) : null;
+    $texto_questao = $questao_post ? wp_trim_words( $questao_post->post_content ?: $questao_post->post_title, 20, '...' ) : ( get_post_meta( $d->ID, '_questao_titulo_snapshot', true ) ?: 'Questão não encontrada' );
+    $autor_questao = $questao_post ? ( get_the_author_meta( 'display_name', $questao_post->post_author ) ?: 'Autor' ) : 'Autor';
+    $questao_url   = ( $questao_post && $questao_post->post_status === 'publish' ) ? get_permalink( $id_questao ) : '';
 
     $items_reais[] = array(
-        'id'       => $d->ID,
-        'pri'      => $prioridade,
-        'ago'      => round( ( time() - strtotime( $d->post_date ) ) / 60 ),
-        'left'     => 'SLA em dia',
-        'type'     => 'Questão',
-        'name'     => $autor_questao,
-        'h'        => '#Q-' . $id_questao,
-        'text'     => $texto_questao,
-        'mot'      => $motivo,
-        'why'      => $detalhes . ' (Denunciado por: ' . $aluno_nome . ')',
-        'n'        => 1,
-        'sub'      => 'Questão #' . $id_questao
+        'id'          => $d->ID,
+        'questao_id'  => $id_questao,
+        'questao_url' => $questao_url,
+        'pri'         => $prioridade,
+        'ago'         => max( 0, round( ( time() - strtotime( $d->post_date_gmt ?: $d->post_date ) ) / 60 ) ),
+        'type'        => 'Questão',
+        'name'        => $autor_questao,
+        'h'           => '#Q-' . $id_questao,
+        'text'        => $texto_questao,
+        'mot'         => $motivo,
+        'why'         => $detalhes,
+        'reporter'    => $aluno_nome,
+        'n'           => 1,
+        'sub'         => 'Questão #' . $id_questao
     );
 }
 
-// Se não houver nenhuma denúncia no banco, mantemos uma de exemplo para o layout não ficar vazio
-if ( empty( $items_reais ) ) {
-    $items_reais[] = array(
-        'id' => 101, 'pri' => 'Alta', 'ago' => 5, 'left' => '25 min restantes',
-        'type' => 'Questão', 'name' => 'Exemplo Demonstrativo', 'h' => '#Q-99',
-        'text' => 'Gabarito da questão de Engenharia de Software está invertido.',
-        'mot' => 'Gabarito errado', 'why' => 'A alternativa correta segundo a bibliografia de Pressman seria a letra B e não C.',
-        'n' => 1, 'sub' => 'Denúncia de teste'
+$historico_reais = array();
+foreach ( $posts_historico as $h ) {
+    $id_questao  = intval( get_post_meta( $h->ID, 'id_questao', true ) );
+    $motivo      = get_post_meta( $h->ID, 'motivo', true ) ?: 'Outro';
+    $status_mod  = get_post_meta( $h->ID, '_status_moderacao', true ) ?: 'arquivada';
+    $mod_nome    = get_post_meta( $h->ID, '_moderador_nome', true ) ?: 'Administrador';
+    $data_dec    = get_post_meta( $h->ID, '_data_decisao', true ) ?: $h->post_modified;
+    $snap_tit    = get_post_meta( $h->ID, '_questao_titulo_snapshot', true );
+    $questao_post = $id_questao > 0 ? get_post( $id_questao ) : null;
+    $titulo_q    = $questao_post ? $questao_post->post_title : ( $snap_tit ?: ('Questão #' . $id_questao) );
+
+    $historico_reais[] = array(
+        'id'         => $h->ID,
+        'questao_id' => $id_questao,
+        'titulo'     => $titulo_q,
+        'mot'        => $motivo,
+        'status'     => $status_mod,
+        'moderador'  => $mod_nome,
+        'data'       => $data_dec,
     );
 }
 
-$dados_json = json_encode( $items_reais, JSON_UNESCAPED_UNICODE );
-$usuario_atual = wp_get_current_user();
+$dados_json     = wp_json_encode( $items_reais, JSON_UNESCAPED_UNICODE );
+$historico_json = wp_json_encode( $historico_reais, JSON_UNESCAPED_UNICODE );
+$ajax_url       = admin_url( 'admin-ajax.php' );
+$mod_nonce      = wp_create_nonce( 'unilab_moderacao_action' );
+$usuario_atual  = wp_get_current_user();
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -181,9 +206,11 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
 <aside>
   <div class="brand"><div class="logo"><svg style="stroke:#fff;width:17px;height:17px" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div><b>Sentinel</b><small>ADMIN</small></div></div>
   <div class="grp">OPERAÇÃO</div>
-  <button class="nav on"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Fila de denúncias<span class="n" id="navN">0</span></button>
+  <button type="button" class="nav on" id="tabPendentes"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Fila de denúncias<span class="n" id="navN">0</span></button>
+  <button type="button" class="nav" id="tabHistorico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>Histórico<span class="n" id="histN" style="background:#374151;">0</span></button>
   <a href="<?php echo admin_url('edit.php?post_type=questao'); ?>" class="nav" style="text-decoration:none;"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></svg>Gerenciar Questões</a>
   <a href="<?php echo esc_url( home_url('/') ); ?>" class="nav" style="text-decoration:none;"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Ver Página Home</a>
+  <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="nav" id="btnSairModeracao" style="text-decoration:none;color:#fca5a5;"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sair da Conta</a>
   <div class="status"><b><span class="dot"></span>Operação normal</b>UNILAB Banco de Questões</div>
   <div class="me">
     <div class="av"><?php echo strtoupper(substr($usuario_atual->display_name, 0, 2)); ?></div>
@@ -195,6 +222,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
   <div class="top">
     <span>Administração</span><span>›</span><b>Moderação de Questões</b>
     <div class="sp"></div>
+    <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="btn" style="text-decoration:none;font-size:12px;color:#b91c1c;border-color:#fecaca;background:#fef2f2;">Sair</a>
     <div class="av" style="background:var(--blue);color:#fff"><?php echo strtoupper(substr($usuario_atual->display_name, 0, 2)); ?></div>
   </div>
 
@@ -207,50 +235,72 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
       <div class="upd"><span class="dot"></span><span id="upd">Atualizado</span><button class="btn" onclick="location.reload();"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.300 5.700M20 4v7h-7"/></svg>Atualizar</button></div>
     </div>
 
-    <div class="filters">
-      <label class="search" style="margin:0;font-weight:400"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Buscar denúncia" aria-label="Buscar"></label>
-      <label class="sel" style="margin:0;font-weight:400">Prioridade: <select id="fp"><option value="">Todas</option><option>Alta</option><option>Média</option><option>Baixa</option></select></label>
-      <label class="sel" style="margin:0;font-weight:400">Motivo: <select id="fm"><option value="">Todos</option></select></label>
-      <label class="sel push" style="margin-left:auto;font-weight:400">Ordenar por <select id="so"><option value="new">Novas</option><option value="pri">Prioridade</option></select></label>
-    </div>
+    <div id="secPendentes">
+      <div class="filters">
+        <label class="search" style="margin:0;font-weight:400"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Buscar denúncia" aria-label="Buscar"></label>
+        <label class="sel" style="margin:0;font-weight:400">Prioridade: <select id="fp"><option value="">Todas</option><option>Alta</option><option>Média</option><option>Baixa</option></select></label>
+        <label class="sel" style="margin:0;font-weight:400">Motivo: <select id="fm"><option value="">Todos</option></select></label>
+        <label class="sel push" style="margin-left:auto;font-weight:400">Ordenar por <select id="so"><option value="new">Novas</option><option value="pri">Prioridade</option></select></label>
+      </div>
 
-    <div class="bar">
-      <div>
-        <h2>Fila de denúncias pendentes <span class="cnt" id="cnt">0</span></h2>
+      <div class="bar">
+        <div>
+          <h2>Fila de denúncias pendentes <span class="cnt" id="cnt">0</span></h2>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="width:40px"><input type="checkbox" id="all"></th><th>TRIAGEM</th><th>QUESTÃO DENUNCIADA</th><th>JUSTIFICATIVA DO ALUNO</th><th>SINAIS</th><th>AÇÕES RÁPIDAS</th></tr></thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty" hidden>Nenhuma denúncia pendente no banco de dados.</div>
+        <div class="foot"><span id="range"></span></div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="scroll">
-        <table>
-          <thead><tr><th style="width:40px"><input type="checkbox" id="all"></th><th>TRIAGEM</th><th>QUESTÃO DENUNCIADA</th><th>JUSTIFICATIVA DO ALUNO</th><th>SINAIS</th><th>AÇÕES RÁPIDAS</th></tr></thead>
-          <tbody id="tb"></tbody>
-        </table>
+    <div id="secHistorico" hidden>
+      <div class="bar" style="margin-top:20px;">
+        <div>
+          <h2>Histórico de decisões de moderação <span class="cnt" id="cntHist">0</span></h2>
+        </div>
       </div>
-      <div class="empty" id="empty" hidden>Nenhuma denúncia encontrada no banco de dados.</div>
-      <div class="foot"><span id="range"></span></div>
+      <div class="card">
+        <div class="scroll">
+          <table>
+            <thead><tr><th>PROTOCOLO</th><th>QUESTÃO</th><th>MOTIVO</th><th>DECISÃO</th><th>MODERADOR</th><th>DATA DA DECISÃO</th></tr></thead>
+            <tbody id="tbHist"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="emptyHist" hidden>Nenhuma denúncia foi decidida ainda.</div>
+      </div>
     </div>
   </div>
 </main>
 
-<!-- Modal: confirmação de exclusão -->
+<!-- Modal: confirmação de exclusão (RN06 / RF45 / HU36) -->
 <div class="ov" id="ov1" role="dialog" aria-modal="true">
   <div class="modal m1">
     <div class="mh"><div class="mi r"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></div>
-      <div><h3>Tem certeza?</h3><p id="d1">Esta questão será arquivada ou removida do banco de questões.</p></div></div>
+      <div><h3>Confirmar exclusão da questão?</h3><p id="d1">Esta ação acolherá a denúncia, excluirá permanentemente a questão denunciada do banco de questões e arquivará as denúncias pendentes vinculadas a ela.</p></div></div>
     <button class="x" data-close aria-label="Fechar">✕</button>
-    <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn red" id="confirmDel">Remover da Lista</button></div>
+    <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn red" id="confirmDel">Sim, Excluir Questão</button></div>
   </div>
 </div>
 
 <div class="toast" id="toast" role="status"></div>
 
 <script>
+const AJAX_URL = <?php echo wp_json_encode( $ajax_url ); ?>;
+const MOD_NONCE = <?php echo wp_json_encode( $mod_nonce ); ?>;
 const REASONS = ["Gabarito errado", "Conteúdo ofensivo", "Enunciado incompleto", "Spam ou Duplicada", "Informação perigosa"];
-let items = <?php echo $dados_json; ?>; // DADOS REAIS VINDOS DO WORDPRESS!
+let items = <?php echo $dados_json; ?>; // DENÚNCIAS PENDENTES REAIS DO WORDPRESS
+let historico = <?php echo $historico_json; ?>; // HISTÓRICO REAL DE DECISÕES
 
 const $ = s => document.querySelector(s), P = {Alta:0, Média:1, Baixa:2};
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = m => m < 60 ? `há ${m} min` : `há ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")} min`;
 let pending = null, selected = new Set();
 
@@ -258,20 +308,20 @@ REASONS.forEach(r => $("#fm").insertAdjacentHTML("beforeend", `<option>${r}</opt
 
 function view(){
   const q = $("#q").value.toLowerCase(), fp = $("#fp").value, fm = $("#fm").value;
-  let l = items.filter(i => (!fp || i.pri === fp) && (!fm || i.mot === fm) && [i.text, i.name, i.mot, "dn-"+i.id].join(" ").toLowerCase().includes(q));
-  
+  let l = items.filter(i => (!fp || i.pri === fp) && (!fm || i.mot === fm) && [i.text, i.name, i.mot, i.why, i.reporter, "dn-"+i.id].join(" ").toLowerCase().includes(q));
+
   const o = $("#so").value;
   l.sort(o === "pri" ? (a,b) => P[a.pri] - P[b.pri] || a.ago - b.ago : (a,b) => a.ago - b.ago);
-  
+
   $("#tb").innerHTML = l.map(i => `<tr class="row ${selected.has(i.id)?"sel-on":""}" data-id="${i.id}">
    <td><input type="checkbox" data-sel="${i.id}" ${selected.has(i.id)?"checked":""}></td>
-   <td><div class="id">#DN-${i.id}</div><span class="pr ${i.pri}">${i.pri}</span><div class="tm">${fmt(i.ago)}</div></td>
-   <td><div class="post"><div class="who"><span class="tag">Questão</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q></div></td>
-   <td><span class="mot">${esc(i.mot)}</span><div class="just">${esc(i.why)}</div></td>
+   <td><div class="id">#DN-${i.id}</div><span class="pr ${esc(i.pri)}">${esc(i.pri)}</span><div class="tm">${fmt(i.ago)}</div></td>
+   <td><div class="post"><div class="who"><span class="tag">Questão</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q>${i.questao_url ? `<a class="ctx" href="${esc(i.questao_url)}" target="_blank" rel="noopener noreferrer">Ver questão denunciada ↗</a>` : `<span class="tl">Questão indisponível</span>`}</div></td>
+   <td><span class="mot">${esc(i.mot)}</span><div class="just">${esc(i.why)}<div style="margin-top:4px;font-size:11px;color:#475569;">Denunciado por: <strong>${esc(i.reporter)}</strong></div></div></td>
    <td class="sig"><b>🚩 ${i.n} sinalização</b><small>${esc(i.sub)}</small></td>
    <td><div class="qa">
-     <button class="btn red" data-del="${i.id}">Excluir Questão</button>
-     <button class="btn" data-rej="${i.id}">Ignorar / Rejeitar</button>
+     <button type="button" class="btn red" data-del="${i.id}">Excluir Questão</button>
+     <button type="button" class="btn" data-rej="${i.id}">Ignorar / Rejeitar</button>
    </div></td></tr>`).join("");
 
   $("#empty").hidden = l.length > 0;
@@ -279,30 +329,137 @@ function view(){
   $("#range").textContent = `Exibindo ${l.length} de ${items.length} denúncias pendentes`;
 }
 
-function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2600)}
+function viewHistorico(){
+  $("#tbHist").innerHTML = historico.map(h => {
+    const labelStatus = h.status === "acolhida" ? "Denúncia Acolhida (Questão Excluída)"
+                      : h.status === "rejeitada" ? "Denúncia Rejeitada (Questão Mantida)"
+                      : h.status === "questao_excluida_autor" ? "Arquivada (Autor Excluiu)"
+                      : esc(h.status);
+    const pillStyle = h.status === "acolhida" ? "background:var(--red-bg);color:var(--red);"
+                    : h.status === "rejeitada" ? "background:#e7f6ee;color:var(--green);"
+                    : "background:var(--bg);color:var(--muted);";
+    return `<tr>
+      <td><div class="id">#DN-${h.id}</div></td>
+      <td><strong>${esc(h.titulo)}</strong> <span class="id">(#Q-${h.questao_id})</span></td>
+      <td><span class="mot">${esc(h.mot)}</span></td>
+      <td><span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;${pillStyle}">${labelStatus}</span></td>
+      <td>${esc(h.moderador)}</td>
+      <td>${esc(h.data)}</td>
+    </tr>`;
+  }).join("");
+  $("#emptyHist").hidden = historico.length > 0;
+  $("#cntHist").textContent = $("#histN").textContent = historico.length;
+}
 
-document.addEventListener("click", e => {
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),3000)}
+
+async function executarModeracao(denunciaId, acao){
+  const body = new URLSearchParams({
+    action: "unilab_moderar_denuncia",
+    nonce: MOD_NONCE,
+    denuncia_id: String(denunciaId),
+    acao_moderacao: acao
+  });
+  const resp = await fetch(AJAX_URL, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: body.toString()
+  });
+  const json = await resp.json();
+  if(!resp.ok || !json.success){
+    throw new Error((json && json.data && json.data.mensagem) || "Erro ao salvar decisão de moderação.");
+  }
+  return json.data;
+}
+
+$("#tabPendentes").addEventListener("click", () => {
+  $("#tabPendentes").classList.add("on");
+  $("#tabHistorico").classList.remove("on");
+  $("#secPendentes").hidden = false;
+  $("#secHistorico").hidden = true;
+});
+
+$("#tabHistorico").addEventListener("click", () => {
+  $("#tabHistorico").classList.add("on");
+  $("#tabPendentes").classList.remove("on");
+  $("#secPendentes").hidden = true;
+  $("#secHistorico").hidden = false;
+});
+
+document.addEventListener("click", async e => {
   const t = e.target.closest("button,input"); if(!t) return;
+  if(t.id === "all"){
+    const rows = [...document.querySelectorAll("[data-sel]")];
+    if(t.checked){
+      rows.forEach(cb => selected.add(+cb.dataset.sel));
+    } else {
+      selected.clear();
+    }
+    view();
+    return;
+  } else if(t.dataset && t.dataset.sel){
+    const sid = +t.dataset.sel;
+    if(t.checked) selected.add(sid); else selected.delete(sid);
+    view();
+    return;
+  }
   if(t.dataset.del){
-    pending = t.dataset.del;
+    pending = +t.dataset.del;
     $("#ov1").classList.add("open");
   } else if(t.dataset.rej){
     const id = +t.dataset.rej;
-    items = items.filter(x => x.id !== id);
-    view();
-    toast(`Denúncia #DN-${id} resolvida e arquivada.`);
+    t.disabled = true;
+    try {
+      const res = await executarModeracao(id, "rejeitar_denuncia");
+      const alvo = items.find(x => x.id === id);
+      items = items.filter(x => x.id !== id);
+      if(alvo){
+        historico.unshift({
+          id: alvo.id, questao_id: alvo.questao_id, titulo: alvo.text,
+          mot: alvo.mot, status: "rejeitada", moderador: res.moderador, data: res.data
+        });
+      }
+      view();
+      viewHistorico();
+      toast(res.mensagem);
+    } catch(err) {
+      t.disabled = false;
+      toast("Erro: " + err.message);
+    }
   } else if(t.hasAttribute("data-close")){
     $("#ov1").classList.remove("open");
   } else if(t.id === "confirmDel"){
-    $("#ov1").classList.remove("open");
-    items = items.filter(x => x.id != pending);
-    view();
-    toast(`Questão removida da moderação com sucesso.`);
+    if(!pending) return;
+    t.disabled = true;
+    try {
+      const res = await executarModeracao(pending, "excluir_questao");
+      const alvo = items.find(x => x.id === pending);
+      const qid = res.questao_id;
+      const removidas = items.filter(x => x.id === pending || (qid > 0 && x.questao_id === qid));
+      items = items.filter(x => x.id !== pending && !(qid > 0 && x.questao_id === qid));
+      removidas.forEach(r => {
+        historico.unshift({
+          id: r.id, questao_id: r.questao_id, titulo: r.text,
+          mot: r.mot, status: "acolhida", moderador: res.moderador, data: res.data
+        });
+      });
+      $("#ov1").classList.remove("open");
+      pending = null;
+      view();
+      viewHistorico();
+      toast(res.mensagem);
+    } catch(err) {
+      toast("Erro: " + err.message);
+    } finally {
+      t.disabled = false;
+    }
   }
 });
 
 ["#q","#fp","#fm","#so"].forEach(s => $(s).addEventListener("input", view));
 view();
+viewHistorico();
 </script>
 </body>
 </html>

@@ -27,8 +27,8 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_registrar_su
         $mensagem_erro = 'Informe um endereço de e-mail institucional válido.';
     } elseif ( email_exists( $email ) ) {
         $mensagem_erro = 'Este e-mail já está cadastrado no sistema. Tente fazer login ou recuperar sua senha.';
-    } elseif ( strlen( $senha ) < 6 ) {
-        $mensagem_erro = 'A senha de acesso deve conter no mínimo 6 caracteres.';
+    } elseif ( strlen( $senha ) < 8 ) {
+        $mensagem_erro = 'A senha de acesso deve conter no mínimo 8 caracteres.';
     } elseif ( $senha !== $confirma_senha ) {
         $mensagem_erro = 'As senhas informadas não conferem. Digite a mesma senha em ambos os campos.';
     } elseif ( ! $termos ) {
@@ -602,12 +602,12 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_registrar_su
           <div class="figma-field">
             <label class="figma-label" for="reg_senha">Senha de acesso *</label>
             <div class="figma-password-box">
-              <input type="password" id="reg_senha" name="senha" class="figma-input" placeholder="••••••••••••" required autocomplete="new-password">
+              <input type="password" id="reg_senha" name="senha" class="figma-input" placeholder="••••••••••••" required minlength="8" autocomplete="new-password">
               <button type="button" class="btn-toggle-eye" onclick="toggleVisibilidade('reg_senha', this)" title="Mostrar/ocultar senha">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
-            <div class="figma-help-note">Mínimo de 6 caracteres.</div>
+            <div class="figma-help-note">Mínimo de 8 caracteres.</div>
           </div>
 
           <div class="figma-field">

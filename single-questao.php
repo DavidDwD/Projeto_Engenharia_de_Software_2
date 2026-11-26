@@ -14,15 +14,22 @@ if ( empty( $disciplinas ) || is_wp_error( $disciplinas ) ) {
     $disciplinas = get_the_terms( get_the_ID(), 'categoria_disciplina' );
 }
 $nome_disciplina = ( ! empty( $disciplinas ) && ! is_wp_error( $disciplinas ) ) ? $disciplinas[0]->name : get_post_meta( get_the_ID(), 'categoria', true );
+$slug_disciplina = ( ! empty( $disciplinas ) && ! is_wp_error( $disciplinas ) ) ? $disciplinas[0]->slug : sanitize_title( $nome_disciplina );
 if ( empty( $nome_disciplina ) ) {
     $nome_disciplina = 'Engenharia de Software';
+    $slug_disciplina = 'engenharia_software';
 }
+$nome_professor = get_post_meta( get_the_ID(), 'nome_professor', true );
+$tags_questao   = get_the_terms( get_the_ID(), 'tag_questao' );
+$ts_pub         = get_the_time( 'U' );
+$ts_mod         = get_the_modified_time( 'U' );
+$foi_editada    = ( $ts_mod && $ts_pub && ( $ts_mod - $ts_pub ) > 60 );
 
 $usuario_atual_id = get_current_user_id();
 $autor_id = intval( get_post_field( 'post_author', get_the_ID() ) );
 $eh_autor = is_user_logged_in() && ( $usuario_atual_id === $autor_id || current_user_can( 'edit_post', get_the_ID() ) );
 
-$nome_autor = get_the_author() ?: 'Estudante UNILAB';
+$nome_autor = get_the_author_meta( 'display_name', $autor_id ) ?: get_the_author_meta( 'user_login', $autor_id ) ?: get_the_author() ?: 'Estudante UNILAB';
 $partes_autor = explode( ' ', trim( $nome_autor ) );
 $iniciais_autor = 'UN';
 if ( ! empty( $partes_autor[0] ) ) {
@@ -50,6 +57,22 @@ $usuario_curtiu    = in_array( get_the_ID(), $curtidas_user );
 
 $favoritos_user    = is_user_logged_in() ? (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true ) : array();
 $usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
+
+$ja_denunciou_user = false;
+if ( is_user_logged_in() ) {
+    $den_existente = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => array(
+            'relation' => 'AND',
+            array( 'key' => 'id_questao', 'value' => get_the_ID() ),
+            array( 'key' => 'id_usuario_denunciante', 'value' => get_current_user_id() ),
+        ),
+    ) );
+    $ja_denunciou_user = ! empty( $den_existente );
+}
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -120,6 +143,8 @@ $usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
       z-index: 999;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
+    body.admin-bar .figma-navbar { top: 32px; }
+    @media (max-width: 782px) { body.admin-bar .figma-navbar { top: 46px; } }
 
     .figma-navbar-brand {
       display: flex;
@@ -497,8 +522,9 @@ $usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
       color: #14532d;
     }
 
-    .feedback-box.ativo {
-      display: block;
+    .feedback-box.ativo,
+    .feedback-box.visivel {
+      display: block !important;
     }
 
     #feedback-titulo {
@@ -900,9 +926,28 @@ $usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
           QUESTÃO · <?php echo strtoupper(esc_html($nome_disciplina)); ?>
         </div>
 
-        <span class="badge-disciplina"><?php echo esc_html($nome_disciplina); ?></span>
+        <span class="badge-disciplina"><a href="<?php echo esc_url( add_query_arg( 'filtro_disc', $slug_disciplina, home_url('/') ) ); ?>" style="color:inherit; text-decoration:none;"><?php echo esc_html($nome_disciplina); ?></a></span>
 
         <h1 class="questao-titulo"><?php the_title(); ?></h1>
+
+        <!-- Metadados de Autor, Data Exata, Edição, Professor e Tags (RF21 / RF34 / RN08 / HU15) -->
+        <div class="figma-questao-meta-bar" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:-4px 0 20px 0; padding-bottom:14px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#64748b;">
+          <span>Por <strong style="color:#0f172a;"><?php echo esc_html( $nome_autor ); ?></strong></span>
+          <span>Publicado em <strong style="color:#334155;"><?php echo esc_html( get_the_date( 'd/m/Y H:i' ) ); ?></strong></span>
+          <?php if ( $foi_editada ) : ?>
+            <span style="background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:6px; font-size:12px;">Editado em <?php echo esc_html( get_the_modified_date( 'd/m/Y H:i' ) ); ?></span>
+          <?php endif; ?>
+          <?php if ( ! empty( $nome_professor ) ) : ?>
+            <span style="background:#eff6ff; color:#1e40af; padding:2px 10px; border-radius:99px; font-size:12px; font-weight:600;">Prof.: <?php echo esc_html( $nome_professor ); ?></span>
+          <?php endif; ?>
+          <?php if ( ! empty( $tags_questao ) && ! is_wp_error( $tags_questao ) ) : ?>
+            <span style="display:inline-flex; flex-wrap:wrap; gap:6px;">
+              <?php foreach ( $tags_questao as $tg ) : ?>
+                <a href="<?php echo esc_url( add_query_arg( 'busca_q', $tg->name, home_url('/') ) ); ?>" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; text-decoration:none;">#<?php echo esc_html( $tg->name ); ?></a>
+              <?php endforeach; ?>
+            </span>
+          <?php endif; ?>
+        </div>
 
         <div class="enunciado-box">
           <?php echo nl2br(esc_html($enunciado)); ?>
@@ -982,14 +1027,35 @@ $usuario_favoritou = in_array( get_the_ID(), $favoritos_user );
             <div style="background:#e6f4ea; color:#137333; padding:10px 16px; border-radius:8px; margin-top:12px; font-size:14px; font-weight:600;">
               ✓ Denúncia enviada para a moderação com sucesso!
             </div>
+          <?php elseif ( isset($_GET['denuncia']) && $_GET['denuncia'] === 'duplicada' ) : ?>
+            <div style="background:#fef3c7; color:#92400e; padding:10px 16px; border-radius:8px; margin-top:12px; font-size:14px; font-weight:600;">
+              ⚠️ Você já enviou uma denúncia pendente para esta questão. Ela já está na fila de análise.
+            </div>
+          <?php elseif ( isset($_GET['denuncia']) && $_GET['denuncia'] === 'invalida' ) : ?>
+            <div style="background:#fee2e2; color:#991b1b; padding:10px 16px; border-radius:8px; margin-top:12px; font-size:14px; font-weight:600;">
+              ❌ Por favor, informe o motivo e uma justificativa válida para enviar a denúncia.
+            </div>
           <?php endif; ?>
 
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e2e8f0;">
-            <button type="button" onclick="document.getElementById('modalDenuncia').style.display='flex'" style="background:none; border:1px solid #fecaca; border-radius:20px; padding:7px 14px; font-size:13px; color:#b91c1c; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-              Denunciar questão
-            </button>
+            <?php if ( $ja_denunciou_user ) : ?>
+              <span style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:20px; padding:7px 14px; font-weight:600;">
+                🚩 Você já denunciou esta questão (em análise)
+              </span>
+            <?php else : ?>
+              <button type="button" id="btn-abrir-modal-denuncia" onclick="document.getElementById('modalDenuncia').style.display='flex'" style="background:none; border:1px solid #fecaca; border-radius:20px; padding:7px 14px; font-size:13px; color:#b91c1c; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                Denunciar questão
+              </button>
+            <?php endif; ?>
           </div>
+        <?php else : ?>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid #e2e8f0; font-size:13px; color:#64748b;">
+            <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" style="color:#102D5C; font-weight:700; text-decoration:underline;">Faça login</a> para curtir, salvar nos favoritos ou denunciar esta questão.
+          </div>
+        <?php endif; ?>
+
+        <?php if ( is_user_logged_in() && ! $ja_denunciou_user ) : ?>
 
           <!-- Modal de Denúncia -->
           <div id="modalDenuncia" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">

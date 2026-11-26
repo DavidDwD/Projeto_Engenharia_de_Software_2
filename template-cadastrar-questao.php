@@ -12,35 +12,47 @@ $id_edicao = isset( $_GET['editar'] ) ? intval( $_GET['editar'] ) : 0;
 $dados_preenchidos = array();
 $permissao_negada = false;
 
+/**
+ * Carrega dados persistidos de uma questão para o formulário de edição (RF34 / RF35).
+ */
+function unilab_carregar_dados_questao_edicao( $id_edicao ) {
+    $post_edicao = get_post( $id_edicao );
+    $termos_disc = get_the_terms( $id_edicao, 'disciplina' );
+    if ( empty( $termos_disc ) || is_wp_error( $termos_disc ) ) {
+        $termos_disc = get_the_terms( $id_edicao, 'categoria_disciplina' );
+    }
+    $disc_slug   = ( ! empty( $termos_disc ) && ! is_wp_error( $termos_disc ) ) ? $termos_disc[0]->slug : '';
+    $termos_tags = wp_get_post_terms( $id_edicao, 'tag_questao', array( 'fields' => 'names' ) );
+    $tags_str    = ( ! empty( $termos_tags ) && ! is_wp_error( $termos_tags ) ) ? implode( ', ', $termos_tags ) : '';
+
+    return array(
+        'id'               => $id_edicao,
+        'assunto'          => get_the_title( $id_edicao ),
+        'enunciado'        => get_post_meta( $id_edicao, 'enunciado', true ) ?: ( $post_edicao ? $post_edicao->post_content : '' ),
+        'categoria'        => $disc_slug ?: get_post_meta( $id_edicao, 'categoria', true ),
+        'nome_professor'   => get_post_meta( $id_edicao, 'nome_professor', true ),
+        'tags_livres'      => $tags_str,
+        'alternativa_a'    => get_post_meta( $id_edicao, 'alternativa_a', true ),
+        'alternativa_b'    => get_post_meta( $id_edicao, 'alternativa_b', true ),
+        'alternativa_c'    => get_post_meta( $id_edicao, 'alternativa_c', true ),
+        'alternativa_d'    => get_post_meta( $id_edicao, 'alternativa_d', true ),
+        'alternativa_e'    => get_post_meta( $id_edicao, 'alternativa_e', true ),
+        'resposta_correta' => get_post_meta( $id_edicao, 'resposta_correta', true ),
+        'explicacao'       => get_post_meta( $id_edicao, 'explicacao', true ),
+        'link_externo'     => get_post_meta( $id_edicao, 'link_externo', true ),
+        'anexo_pdf'        => get_post_meta( $id_edicao, 'anexo_pdf', true ),
+        'anexo_pdf_nome'   => get_post_meta( $id_edicao, 'anexo_pdf_nome', true ) ?: 'Documento PDF Anexado',
+        'anexo_imagens'    => array_values( array_filter( (array) ( get_post_meta( $id_edicao, 'anexo_imagens', true ) ?: array() ) ) ),
+    );
+}
+
 // 1. Verificação de permissão para modo de edição (RF34)
 if ( $id_edicao > 0 ) {
     $post_edicao = get_post( $id_edicao );
     if ( $post_edicao && $post_edicao->post_type === 'questao' ) {
         $autor_id = intval( $post_edicao->post_author );
         if ( $esta_logado && ( $autor_id === get_current_user_id() || current_user_can( 'edit_post', $id_edicao ) ) ) {
-            $termos_disc = get_the_terms( $id_edicao, 'disciplina' );
-            if ( empty( $termos_disc ) || is_wp_error( $termos_disc ) ) {
-                $termos_disc = get_the_terms( $id_edicao, 'categoria_disciplina' );
-            }
-            $disc_slug = ( ! empty( $termos_disc ) && ! is_wp_error( $termos_disc ) ) ? $termos_disc[0]->slug : '';
-
-            $dados_preenchidos = array(
-                'id'               => $id_edicao,
-                'assunto'          => get_the_title( $id_edicao ),
-                'enunciado'        => get_post_meta( $id_edicao, 'enunciado', true ) ?: $post_edicao->post_content,
-                'categoria'        => $disc_slug ?: get_post_meta( $id_edicao, 'categoria', true ),
-                'alternativa_a'    => get_post_meta( $id_edicao, 'alternativa_a', true ),
-                'alternativa_b'    => get_post_meta( $id_edicao, 'alternativa_b', true ),
-                'alternativa_c'    => get_post_meta( $id_edicao, 'alternativa_c', true ),
-                'alternativa_d'    => get_post_meta( $id_edicao, 'alternativa_d', true ),
-                'alternativa_e'    => get_post_meta( $id_edicao, 'alternativa_e', true ),
-                'resposta_correta' => get_post_meta( $id_edicao, 'resposta_correta', true ),
-                'explicacao'       => get_post_meta( $id_edicao, 'explicacao', true ),
-                'link_externo'     => get_post_meta( $id_edicao, 'link_externo', true ),
-                'anexo_pdf'        => get_post_meta( $id_edicao, 'anexo_pdf', true ),
-                'anexo_pdf_nome'   => get_post_meta( $id_edicao, 'anexo_pdf_nome', true ) ?: 'Documento PDF Anexado',
-                'anexo_imagens'    => array_values( array_filter( (array) ( get_post_meta( $id_edicao, 'anexo_imagens', true ) ?: array() ) ) ),
-            );
+            $dados_preenchidos = unilab_carregar_dados_questao_edicao( $id_edicao );
         } else {
             $permissao_negada = true;
         }
@@ -49,16 +61,19 @@ if ( $id_edicao > 0 ) {
 
 // 2. Processamento do envio do formulário (Criação RF10 ou Edição RF34)
 if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST' ) {
-    $assunto   = sanitize_text_field( $_POST['assunto'] ?? '' );
-    $enunciado = wp_kses_post( $_POST['enunciado'] ?? '' );
-    $alt_a     = sanitize_text_field( $_POST['alternativa_a'] ?? '' );
-    $alt_b     = sanitize_text_field( $_POST['alternativa_b'] ?? '' );
-    $alt_c     = sanitize_text_field( $_POST['alternativa_c'] ?? '' );
-    $alt_d     = sanitize_text_field( $_POST['alternativa_d'] ?? '' );
-    $alt_e     = sanitize_text_field( $_POST['alternativa_e'] ?? '' );
-    $gabarito  = strtoupper( trim( sanitize_text_field( $_POST['resposta_correta'] ?? '' ) ) );
-    $explicacao = sanitize_textarea_field( $_POST['explicacao'] ?? '' );
-    $categoria = sanitize_text_field( $_POST['categoria'] ?? '' );
+    $assunto        = trim( sanitize_text_field( $_POST['assunto'] ?? '' ) );
+    $enunciado      = wp_kses_post( $_POST['enunciado'] ?? '' );
+    $nome_professor = trim( sanitize_text_field( $_POST['nome_professor'] ?? '' ) );
+    $tags_livres    = trim( sanitize_text_field( $_POST['tags_livres'] ?? '' ) );
+    $alt_a          = trim( sanitize_text_field( $_POST['alternativa_a'] ?? '' ) );
+    $alt_b          = trim( sanitize_text_field( $_POST['alternativa_b'] ?? '' ) );
+    $alt_c          = trim( sanitize_text_field( $_POST['alternativa_c'] ?? '' ) );
+    $alt_d          = trim( sanitize_text_field( $_POST['alternativa_d'] ?? '' ) );
+    $alt_e          = trim( sanitize_text_field( $_POST['alternativa_e'] ?? '' ) );
+    $gabarito       = strtoupper( trim( sanitize_text_field( $_POST['resposta_correta'] ?? '' ) ) );
+    $explicacao     = trim( sanitize_textarea_field( $_POST['explicacao'] ?? '' ) );
+    $categoria      = sanitize_text_field( $_POST['categoria'] ?? '' );
+    $link_raw       = trim( $_POST['link_externo'] ?? '' );
     $id_post_salvar = isset( $_POST['id_questao_edicao'] ) ? intval( $_POST['id_questao_edicao'] ) : 0;
 
     // Preservar dados preenchidos no formulário
@@ -66,6 +81,8 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         'assunto'          => $assunto,
         'enunciado'        => $enunciado,
         'categoria'        => $categoria,
+        'nome_professor'   => $nome_professor,
+        'tags_livres'      => $tags_livres,
         'alternativa_a'    => $alt_a,
         'alternativa_b'    => $alt_b,
         'alternativa_c'    => $alt_c,
@@ -73,15 +90,86 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         'alternativa_e'    => $alt_e,
         'resposta_correta' => $gabarito,
         'explicacao'       => $explicacao,
-        'link_externo'     => esc_url_raw( $_POST['link_externo'] ?? '' ),
+        'link_externo'     => esc_url_raw( $link_raw ),
     ) );
 
-    // Validação estrita de regras de negócio no servidor (RN08 / RF11-RF15)
+    // Pré-validação estrita de arquivos no servidor (RN03 / RN04 / RNF12)
+    $erro_upload = '';
+    $tamanho_total_upload = 0;
+
+    if ( ! empty( $_FILES['anexo_pdf']['name'] ) ) {
+        $pdf_file = $_FILES['anexo_pdf'];
+        $pdf_ext  = strtolower( pathinfo( $pdf_file['name'], PATHINFO_EXTENSION ) );
+        $limite_pdf = 10 * 1024 * 1024;
+        if ( $pdf_file['error'] !== UPLOAD_ERR_OK ) {
+            $erro_upload = 'Ocorreu um problema ao enviar o arquivo PDF. Tente novamente.';
+        } elseif ( $pdf_ext !== 'pdf' ) {
+            $erro_upload = 'O documento complementar deve estar estritamente no formato PDF (RN04).';
+        } elseif ( $pdf_file['size'] > $limite_pdf ) {
+            $erro_upload = 'O arquivo PDF ultrapassou o tamanho máximo permitido de 10 MB (RN03).';
+        } else {
+            $check_pdf = wp_check_filetype_and_ext( $pdf_file['tmp_name'], $pdf_file['name'], array( 'pdf' => 'application/pdf' ) );
+            $head_pdf  = @file_get_contents( $pdf_file['tmp_name'], false, null, 0, 5 );
+            if ( empty( $check_pdf['ext'] ) && $head_pdf !== '%PDF-' ) {
+                $erro_upload = 'O arquivo enviado não é um documento PDF válido (RN04).';
+            }
+        }
+        $tamanho_total_upload += intval( $pdf_file['size'] );
+    }
+
+    if ( empty( $erro_upload ) && ! empty( $_FILES['anexo_imagens']['name'] ) ) {
+        $f_img    = $_FILES['anexo_imagens'];
+        $multiplo = is_array( $f_img['name'] );
+        $total_f  = $multiplo ? count( $f_img['name'] ) : 1;
+        $limite_img = 5 * 1024 * 1024;
+        $novas_imgs_count = 0;
+
+        for ( $k = 0; $k < $total_f; $k++ ) {
+            $nome_f = $multiplo ? $f_img['name'][$k] : $f_img['name'];
+            $erro_f = $multiplo ? $f_img['error'][$k] : $f_img['error'];
+            $tam_f  = $multiplo ? $f_img['size'][$k] : $f_img['size'];
+            $tmp_f  = $multiplo ? $f_img['tmp_name'][$k] : $f_img['tmp_name'];
+
+            if ( empty( $nome_f ) ) continue;
+            $novas_imgs_count++;
+            $tamanho_total_upload += intval( $tam_f );
+
+            $ext_f = strtolower( pathinfo( $nome_f, PATHINFO_EXTENSION ) );
+            if ( $erro_f !== UPLOAD_ERR_OK ) {
+                $erro_upload = "Não foi possível enviar a imagem \"{$nome_f}\".";
+                break;
+            } elseif ( ! in_array( $ext_f, array( 'jpg', 'jpeg', 'png' ), true ) ) {
+                $erro_upload = "A imagem \"{$nome_f}\" deve estar apenas no formato JPG ou PNG (RN04).";
+                break;
+            } elseif ( $tam_f > $limite_img ) {
+                $erro_upload = "A imagem \"{$nome_f}\" ultrapassou o limite máximo de 5 MB por imagem (RN03).";
+                break;
+            } else {
+                $img_info = @getimagesize( $tmp_f );
+                $mime_real = is_array( $img_info ) && ! empty( $img_info['mime'] ) ? $img_info['mime'] : '';
+                if ( ! in_array( $mime_real, array( 'image/jpeg', 'image/png' ), true ) ) {
+                    $erro_upload = "O arquivo \"{$nome_f}\" não é uma imagem JPG ou PNG válida (RN04).";
+                    break;
+                }
+            }
+        }
+
+        if ( empty( $erro_upload ) && $novas_imgs_count > 3 ) {
+            $erro_upload = 'Você pode enviar no máximo 3 imagens por questão (RN03).';
+        }
+    }
+
+    if ( empty( $erro_upload ) && $tamanho_total_upload > ( 20 * 1024 * 1024 ) ) {
+        $erro_upload = 'O tamanho total somado dos anexos ultrapassou o limite de 20 MB (RN03).';
+    }
+
+    // Validação estrita de regras de negócio no servidor (RN08 / RF11-RF15 / RN05)
     $alts_map = array('A' => $alt_a, 'B' => $alt_b, 'C' => $alt_c, 'D' => $alt_d, 'E' => $alt_e);
-    if ( empty( $assunto ) ) {
-        $mensagem_erro = 'Por favor, informe o assunto da questão (RF11).';
-    } elseif ( empty( $enunciado ) ) {
-        $mensagem_erro = 'Por favor, informe o enunciado da questão (RF12).';
+    $tam_enunciado = mb_strlen( trim( wp_strip_all_tags( $enunciado ) ) );
+    if ( empty( $assunto ) || mb_strlen( $assunto ) < 3 ) {
+        $mensagem_erro = 'Por favor, informe o assunto da questão com pelo menos 3 caracteres (RF11).';
+    } elseif ( empty( $enunciado ) || $tam_enunciado < 10 || $tam_enunciado > 5000 ) {
+        $mensagem_erro = 'O enunciado da questão é obrigatório e deve ter entre 10 e 5.000 caracteres (RF12).';
     } elseif ( empty( $alt_a ) || empty( $alt_b ) ) {
         $mensagem_erro = 'A questão requer no mínimo as alternativas A e B preenchidas (RN08 / RF14).';
     } elseif ( empty( $gabarito ) ) {
@@ -92,6 +180,10 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         $mensagem_erro = 'A explicação teórica da resposta correta é obrigatória (RN08 / RF13).';
     } elseif ( empty( $categoria ) ) {
         $mensagem_erro = 'Selecione uma disciplina para a questão (RF15).';
+    } elseif ( ! empty( $link_raw ) && ( ! preg_match( '#^https?://#i', $link_raw ) || ! filter_var( $link_raw, FILTER_VALIDATE_URL ) ) ) {
+        $mensagem_erro = 'O link externo informado é inválido. Use um endereço web começando com http:// ou https:// (RN05).';
+    } elseif ( ! empty( $erro_upload ) ) {
+        $mensagem_erro = $erro_upload;
     } else {
         if ( $id_post_salvar > 0 ) {
             // Fluxo de Atualização (RF34)
@@ -130,6 +222,14 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         update_post_meta( $post_id, 'resposta_correta', sanitize_text_field( $_POST['resposta_correta'] ?? '' ) );
         update_post_meta( $post_id, 'explicacao', sanitize_textarea_field( $_POST['explicacao'] ?? '' ) );
         update_post_meta( $post_id, 'link_externo', esc_url_raw( $_POST['link_externo'] ?? '' ) );
+        update_post_meta( $post_id, 'nome_professor', $nome_professor );
+
+        if ( ! empty( $tags_livres ) ) {
+            $lista_tags = array_values( array_unique( array_filter( array_map( 'trim', explode( ',', $tags_livres ) ) ) ) );
+            wp_set_object_terms( $post_id, $lista_tags, 'tag_questao', false );
+        } else {
+            wp_set_object_terms( $post_id, array(), 'tag_questao', false );
+        }
 
         if ( ! empty( $_POST['categoria'] ) ) {
             $cat_selecionada = sanitize_text_field( $_POST['categoria'] );
@@ -145,7 +245,8 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
                 'redes'                            => 'Redes de Computadores',
                 'redes-de-computadores'            => 'Redes de Computadores',
             );
-            $nome_cat = isset( $mapa_nomes[$cat_selecionada] ) ? $mapa_nomes[$cat_selecionada] : $cat_selecionada;
+            $termo_cat = get_term_by( 'slug', $cat_selecionada, 'disciplina' );
+            $nome_cat  = isset( $mapa_nomes[$cat_selecionada] ) ? $mapa_nomes[$cat_selecionada] : ( $termo_cat ? $termo_cat->name : $cat_selecionada );
             update_post_meta( $post_id, 'categoria', $nome_cat );
             wp_set_object_terms( $post_id, $nome_cat, 'disciplina', false );
             if ( taxonomy_exists( 'categoria_disciplina' ) ) {
@@ -248,25 +349,9 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
     }
 }
 
-// Recarrega dados em caso de edição
-if ( $id_edicao > 0 && ! $permissao_negada ) {
-    $dados_preenchidos = array(
-        'id'               => $id_edicao,
-        'assunto'          => get_the_title( $id_edicao ),
-        'enunciado'        => get_post_meta( $id_edicao, 'enunciado', true ) ?: get_post_field( 'post_content', $id_edicao ),
-        'categoria'        => get_post_meta( $id_edicao, 'categoria', true ),
-        'alternativa_a'    => get_post_meta( $id_edicao, 'alternativa_a', true ),
-        'alternativa_b'    => get_post_meta( $id_edicao, 'alternativa_b', true ),
-        'alternativa_c'    => get_post_meta( $id_edicao, 'alternativa_c', true ),
-        'alternativa_d'    => get_post_meta( $id_edicao, 'alternativa_d', true ),
-        'alternativa_e'    => get_post_meta( $id_edicao, 'alternativa_e', true ),
-        'resposta_correta' => get_post_meta( $id_edicao, 'resposta_correta', true ),
-        'explicacao'       => get_post_meta( $id_edicao, 'explicacao', true ),
-        'link_externo'     => get_post_meta( $id_edicao, 'link_externo', true ),
-        'anexo_pdf'        => get_post_meta( $id_edicao, 'anexo_pdf', true ),
-        'anexo_pdf_nome'   => get_post_meta( $id_edicao, 'anexo_pdf_nome', true ) ?: 'Documento PDF Anexado',
-        'anexo_imagens'    => array_values( array_filter( (array) ( get_post_meta( $id_edicao, 'anexo_imagens', true ) ?: array() ) ) ),
-    );
+// Recarrega dados salvos após edição bem-sucedida
+if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
+    $dados_preenchidos = unilab_carregar_dados_questao_edicao( $id_edicao );
 }
 ?>
 <!DOCTYPE html>
@@ -846,14 +931,60 @@ if ( $id_edicao > 0 && ! $permissao_negada ) {
 
             <div class="figma-field-group">
               <label class="figma-label" for="categoria">Disciplina / Área de Conhecimento <span class="obrigatorio">*</span></label>
+              <?php
+              $discs_padrao = array(
+                  'engenharia_software' => 'Engenharia de Software',
+                  'algoritmos'          => 'Algoritmos e Estruturas de Dados',
+                  'calculo'             => 'Cálculo Diferencial e Integral',
+                  'redes'               => 'Redes de Computadores',
+                  'humanidades'         => 'Humanidades e Lusofonia',
+              );
+              $discs_db = get_terms( array( 'taxonomy' => 'disciplina', 'hide_empty' => false ) );
+              if ( ! empty( $discs_db ) && ! is_wp_error( $discs_db ) ) {
+                  foreach ( $discs_db as $dt ) {
+                      if ( ! in_array( $dt->name, $discs_padrao, true ) && ! isset( $discs_padrao[$dt->slug] ) ) {
+                          $discs_padrao[$dt->slug] = $dt->name;
+                      }
+                  }
+              }
+              $cat_atual = $dados_preenchidos['categoria'] ?? '';
+              ?>
               <select id="categoria" name="categoria" class="figma-select" required>
                 <option value="">Selecione uma disciplina...</option>
-                <option value="engenharia_software" <?php selected( ($dados_preenchidos['categoria'] ?? '') === 'engenharia_software' || ($dados_preenchidos['categoria'] ?? '') === 'engenharia-de-software' || ($dados_preenchidos['categoria'] ?? '') === 'Engenharia de Software' ); ?>>Engenharia de Software</option>
-                <option value="algoritmos" <?php selected( ($dados_preenchidos['categoria'] ?? '') === 'algoritmos' || ($dados_preenchidos['categoria'] ?? '') === 'algoritmos-e-estruturas-de-dados' || ($dados_preenchidos['categoria'] ?? '') === 'Algoritmos e Estruturas de Dados' ); ?>>Algoritmos e Estruturas de Dados</option>
-                <option value="calculo" <?php selected( ($dados_preenchidos['categoria'] ?? '') === 'calculo' || ($dados_preenchidos['categoria'] ?? '') === 'calculo-diferencial' || ($dados_preenchidos['categoria'] ?? '') === 'Cálculo Diferencial e Integral' ); ?>>Cálculo Diferencial e Integral</option>
-                <option value="redes" <?php selected( ($dados_preenchidos['categoria'] ?? '') === 'redes' || ($dados_preenchidos['categoria'] ?? '') === 'redes-de-computadores' || ($dados_preenchidos['categoria'] ?? '') === 'Redes de Computadores' ); ?>>Redes de Computadores</option>
-                <option value="humanidades" <?php selected( ($dados_preenchidos['categoria'] ?? '') === 'humanidades' || ($dados_preenchidos['categoria'] ?? '') === 'humanidades-e-lusofonia' || ($dados_preenchidos['categoria'] ?? '') === 'Humanidades e Lusofonia' ); ?>>Humanidades e Lusofonia</option>
+                <?php foreach ( $discs_padrao as $slug_opt => $nome_opt ) :
+                    $is_sel = ( $cat_atual === $slug_opt || $cat_atual === $nome_opt || sanitize_title( $nome_opt ) === sanitize_title( $cat_atual ) );
+                ?>
+                  <option value="<?php echo esc_attr( $slug_opt ); ?>" <?php selected( $is_sel ); ?>><?php echo esc_html( $nome_opt ); ?></option>
+                <?php endforeach; ?>
               </select>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;" class="figma-field-group">
+              <div>
+                <label class="figma-label" for="nome_professor">Professor / Docente (opcional)</label>
+                <input type="text" id="nome_professor" name="nome_professor" list="lista-professores-existentes" class="figma-input" placeholder="Ex: Prof. Ramon Vieira" value="<?php echo esc_attr( $dados_preenchidos['nome_professor'] ?? '' ); ?>">
+                <datalist id="lista-professores-existentes">
+                  <?php
+                  global $wpdb;
+                  $profs_db = $wpdb->get_col( "SELECT DISTINCT meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'nome_professor' AND meta_value != '' LIMIT 30" );
+                  foreach ( (array) $profs_db as $p_nome ) : ?>
+                    <option value="<?php echo esc_attr( $p_nome ); ?>">
+                  <?php endforeach; ?>
+                </datalist>
+              </div>
+              <div>
+                <label class="figma-label" for="tags_livres">Tags / Palavras-chave (opcional)</label>
+                <input type="text" id="tags_livres" name="tags_livres" list="lista-tags-existentes" class="figma-input" placeholder="Ex: mvc, arquitetura, requisitos" value="<?php echo esc_attr( $dados_preenchidos['tags_livres'] ?? '' ); ?>">
+                <datalist id="lista-tags-existentes">
+                  <?php
+                  $tags_db = get_terms( array( 'taxonomy' => 'tag_questao', 'hide_empty' => false, 'number' => 20 ) );
+                  if ( ! empty( $tags_db ) && ! is_wp_error( $tags_db ) ) :
+                      foreach ( $tags_db as $t_obj ) : ?>
+                        <option value="<?php echo esc_attr( $t_obj->name ); ?>">
+                      <?php endforeach;
+                  endif; ?>
+                </datalist>
+              </div>
             </div>
 
             <div class="figma-field-group" style="margin-bottom: 0;">
@@ -917,8 +1048,8 @@ if ( $id_edicao > 0 && ! $permissao_negada ) {
             <p class="figma-section-subtitle">Enriqueça a questão com justificativas teóricas, documentos PDF e imagens.</p>
 
             <div class="figma-field-group">
-              <label class="figma-label" for="explicacao">Explicação / Resolução Comentada</label>
-              <textarea id="explicacao" name="explicacao" class="figma-textarea" placeholder="Explique passo a passo o porquê da alternativa correta ser a indicada e analise as pegadinhas..." rows="4"><?php echo esc_textarea( $dados_preenchidos['explicacao'] ?? '' ); ?></textarea>
+              <label class="figma-label" for="explicacao">Explicação / Resolução Comentada <span class="obrigatorio">*</span></label>
+              <textarea id="explicacao" name="explicacao" class="figma-textarea" required placeholder="Explique passo a passo o porquê da alternativa correta ser a indicada e analise as pegadinhas..." rows="4"><?php echo esc_textarea( $dados_preenchidos['explicacao'] ?? '' ); ?></textarea>
             </div>
 
             <div class="figma-field-group">

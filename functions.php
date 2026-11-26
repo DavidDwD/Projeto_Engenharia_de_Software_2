@@ -205,10 +205,10 @@ function unilab_forcar_templates_figma( $template ) {
     }
 
     // 7. Central de Moderação Admin (/central-de-moderacao/)
-    if ( is_page( 'central-de-moderacao' ) || is_page( 56 ) ) {
-        $mod_tpl = $dir . '/template-moderação.php';
+    if ( is_page( 'central-de-moderacao' ) || is_page( 56 ) || is_page( 81 ) ) {
+        $mod_tpl = $dir . '/template-moderacao.php';
         if ( ! file_exists( $mod_tpl ) ) {
-            $mod_tpl = $dir . '/template-moderacao.php';
+            $mod_tpl = $dir . '/template-moderação.php';
         }
         if ( file_exists( $mod_tpl ) ) {
             return $mod_tpl;
@@ -640,6 +640,11 @@ function unilab_processar_exclusao_questao_autor() {
             wp_die( 'Você não possui permissão para excluir esta postagem.' );
         }
 
+        // Arquiva denúncias pendentes e limpa favoritos/curtidas antes de excluir (RF36 / HU27)
+        if ( function_exists( 'unilab_limpar_referencias_questao' ) ) {
+            unilab_limpar_referencias_questao( $post_id, 'questao_excluida_autor' );
+        }
+
         // Exclui permanentemente o post
         wp_delete_post( $post_id, true );
 
@@ -783,8 +788,69 @@ add_action( 'wp_ajax_unilab_toggle_curtida', 'unilab_processar_interacao_social'
 add_action( 'wp_ajax_unilab_toggle_favorito', 'unilab_processar_interacao_social' );
 
 // ==============================================================================
-// 7. SISTEMA DE DENÚNCIAS — CPT E PROCESSAMENTO (RF-MODERAÇÃO)
+// 7. SISTEMA DE DENÚNCIAS E MODERAÇÃO PERSISTENTE (RF42, RF44, RF45, RN07)
 // ==============================================================================
+
+/**
+ * Arquiva denúncias pendentes e remove referências de uma questão em favoritos/curtidas.
+ */
+function unilab_limpar_referencias_questao( $questao_id, $status_moderacao = 'acolhida', $moderador = null ) {
+    $questao_id = intval( $questao_id );
+    if ( $questao_id <= 0 ) {
+        return;
+    }
+
+    $admin_user = $moderador instanceof WP_User ? $moderador : wp_get_current_user();
+    $mod_id     = $admin_user && $admin_user->ID ? $admin_user->ID : 0;
+    $mod_nome   = $admin_user && $admin_user->ID ? ( $admin_user->display_name ?: $admin_user->user_login ) : 'Sistema';
+    $data_agora = current_time( 'mysql' );
+
+    // Arquiva todas as denúncias pendentes vinculadas a esta questão
+    $denuncias_relacionadas = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'meta_key'       => 'id_questao',
+        'meta_value'     => $questao_id,
+        'fields'         => 'ids',
+    ) );
+
+    foreach ( $denuncias_relacionadas as $did ) {
+        update_post_meta( $did, '_status_moderacao', $status_moderacao );
+        update_post_meta( $did, '_moderador_id', $mod_id );
+        update_post_meta( $did, '_moderador_nome', $mod_nome );
+        update_post_meta( $did, '_data_decisao', $data_agora );
+        wp_update_post( array(
+            'ID'          => $did,
+            'post_status' => 'private',
+        ) );
+    }
+
+    // Remove a questão excluída das listas de favoritos e curtidas dos usuários (RF09 / HU09 / HU27)
+    $usuarios_fav = get_users( array(
+        'meta_key' => '_unilab_favoritos',
+        'fields'   => 'ID',
+    ) );
+    foreach ( $usuarios_fav as $uid ) {
+        $favs = (array) get_user_meta( $uid, '_unilab_favoritos', true );
+        if ( in_array( $questao_id, array_map( 'intval', $favs ), true ) ) {
+            $novos = array_values( array_diff( array_map( 'intval', $favs ), array( $questao_id ) ) );
+            update_user_meta( $uid, '_unilab_favoritos', $novos );
+        }
+    }
+
+    $usuarios_like = get_users( array(
+        'meta_key' => '_unilab_curtidas_usuario',
+        'fields'   => 'ID',
+    ) );
+    foreach ( $usuarios_like as $uid ) {
+        $likes = (array) get_user_meta( $uid, '_unilab_curtidas_usuario', true );
+        if ( in_array( $questao_id, array_map( 'intval', $likes ), true ) ) {
+            $novos = array_values( array_diff( array_map( 'intval', $likes ), array( $questao_id ) ) );
+            update_user_meta( $uid, '_unilab_curtidas_usuario', $novos );
+        }
+    }
+}
 
 // 7.1 Registra o post type de denúncias
 add_action( 'init', function() {
@@ -797,41 +863,144 @@ add_action( 'init', function() {
     ));
 });
 
-// 7.2 Recebe o envio da denúncia do aluno e salva no banco
+// 7.2 Recebe o envio da denúncia do aluno autenticado e salva no banco (RF42 / HU33)
 add_action( 'admin_post_enviar_denuncia', 'unilab_processar_denuncia' );
-add_action( 'admin_post_nopriv_enviar_denuncia', 'unilab_processar_denuncia' );
 
 function unilab_processar_denuncia() {
+    if ( ! is_user_logged_in() ) {
+        wp_safe_redirect( home_url( '/log-in/' ) );
+        exit;
+    }
+
     if ( ! isset( $_POST['denuncia_nonce'] ) || ! wp_verify_nonce( $_POST['denuncia_nonce'], 'enviar_denuncia_action' ) ) {
         wp_die( 'Ação não permitida.' );
     }
 
     $id_questao = isset( $_POST['id_questao'] ) ? intval( $_POST['id_questao'] ) : 0;
-    $motivo     = isset( $_POST['motivo'] ) ? sanitize_text_field( $_POST['motivo'] ) : 'Outro';
-    $detalhes   = isset( $_POST['detalhes'] ) ? sanitize_textarea_field( $_POST['detalhes'] ) : '';
-    $aluno_nome = is_user_logged_in() ? wp_get_current_user()->display_name : 'Estudante Anônimo';
+    $motivo     = isset( $_POST['motivo'] ) ? trim( sanitize_text_field( $_POST['motivo'] ) ) : '';
+    $detalhes   = isset( $_POST['detalhes'] ) ? trim( sanitize_textarea_field( $_POST['detalhes'] ) ) : '';
+    $user_atual = wp_get_current_user();
+    $aluno_nome = $user_atual->display_name ?: $user_atual->user_login;
 
-    if ( $id_questao > 0 ) {
-        $prioridade = ( $motivo === 'Conteúdo ofensivo' || $motivo === 'Informação perigosa' ) ? 'Alta' : 'Média';
+    if ( $id_questao <= 0 || get_post_type( $id_questao ) !== 'questao' ) {
+        wp_safe_redirect( home_url( '/' ) );
+        exit;
+    }
 
-        $denuncia_id = wp_insert_post( array(
-            'post_type'   => 'denuncia',
-            'post_title'  => 'Denúncia - Questão #' . $id_questao . ' (' . $motivo . ')',
-            'post_status' => 'publish'
-        ));
+    if ( empty( $motivo ) || empty( $detalhes ) ) {
+        wp_safe_redirect( add_query_arg( 'denuncia', 'invalida', get_permalink( $id_questao ) ) );
+        exit;
+    }
 
-        if ( $denuncia_id && ! is_wp_error( $denuncia_id ) ) {
-            update_post_meta( $denuncia_id, 'id_questao', $id_questao );
-            update_post_meta( $denuncia_id, 'motivo', $motivo );
-            update_post_meta( $denuncia_id, 'detalhes', $detalhes );
-            update_post_meta( $denuncia_id, 'aluno_denunciante', $aluno_nome );
-            update_post_meta( $denuncia_id, 'prioridade', $prioridade );
-        }
+    // Regra Fase 2 (RF42): Uma denúncia pendente por usuário por questão
+    $ja_denunciou = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => array(
+            'relation' => 'AND',
+            array(
+                'key'   => 'id_questao',
+                'value' => $id_questao,
+            ),
+            array(
+                'key'   => 'id_usuario_denunciante',
+                'value' => $user_atual->ID,
+            ),
+        ),
+    ) );
+
+    if ( ! empty( $ja_denunciou ) ) {
+        wp_safe_redirect( add_query_arg( 'denuncia', 'duplicada', get_permalink( $id_questao ) ) );
+        exit;
+    }
+
+    $prioridade = ( $motivo === 'Conteúdo ofensivo' || $motivo === 'Informação perigosa' ) ? 'Alta' : 'Média';
+
+    $denuncia_id = wp_insert_post( array(
+        'post_type'   => 'denuncia',
+        'post_title'  => 'Denúncia - Questão #' . $id_questao . ' (' . $motivo . ')',
+        'post_status' => 'publish'
+    ));
+
+    if ( $denuncia_id && ! is_wp_error( $denuncia_id ) ) {
+        update_post_meta( $denuncia_id, 'id_questao', $id_questao );
+        update_post_meta( $denuncia_id, 'motivo', $motivo );
+        update_post_meta( $denuncia_id, 'detalhes', $detalhes );
+        update_post_meta( $denuncia_id, 'aluno_denunciante', $aluno_nome );
+        update_post_meta( $denuncia_id, 'id_usuario_denunciante', $user_atual->ID );
+        update_post_meta( $denuncia_id, 'prioridade', $prioridade );
+        update_post_meta( $denuncia_id, '_status_moderacao', 'pendente' );
+        update_post_meta( $denuncia_id, '_questao_titulo_snapshot', get_the_title( $id_questao ) );
     }
 
     $redirect_url = add_query_arg( 'denuncia', 'sucesso', get_permalink( $id_questao ) );
-    wp_redirect( $redirect_url );
+    wp_safe_redirect( $redirect_url );
     exit;
+}
+
+// 7.3 Endpoint AJAX de Moderação Real no Banco (RF45 / RN07 / HU36)
+add_action( 'wp_ajax_unilab_moderar_denuncia', 'unilab_ajax_moderar_denuncia' );
+function unilab_ajax_moderar_denuncia() {
+    if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Acesso negado. Apenas administradores podem moderar denúncias.' ), 403 );
+    }
+
+    if ( ! check_ajax_referer( 'unilab_moderacao_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido. Recarregue a página e tente novamente.' ), 403 );
+    }
+
+    $denuncia_id    = isset( $_POST['denuncia_id'] ) ? intval( $_POST['denuncia_id'] ) : 0;
+    $acao_moderacao = isset( $_POST['acao_moderacao'] ) ? sanitize_text_field( $_POST['acao_moderacao'] ) : '';
+
+    if ( $denuncia_id <= 0 || get_post_type( $denuncia_id ) !== 'denuncia' ) {
+        wp_send_json_error( array( 'mensagem' => 'Denúncia não encontrada no banco de dados.' ), 404 );
+    }
+
+    $admin_user = wp_get_current_user();
+    $mod_nome   = $admin_user->display_name ?: $admin_user->user_login;
+    $data_agora = current_time( 'mysql' );
+    $id_questao = intval( get_post_meta( $denuncia_id, 'id_questao', true ) );
+
+    if ( $acao_moderacao === 'excluir_questao' ) {
+        if ( $id_questao > 0 ) {
+            unilab_limpar_referencias_questao( $id_questao, 'acolhida', $admin_user );
+            if ( get_post_type( $id_questao ) === 'questao' ) {
+                wp_delete_post( $id_questao, true );
+            }
+        }
+        // Garante que a denúncia atual fique arquivada mesmo se id_questao já não existisse
+        update_post_meta( $denuncia_id, '_status_moderacao', 'acolhida' );
+        update_post_meta( $denuncia_id, '_moderador_id', $admin_user->ID );
+        update_post_meta( $denuncia_id, '_moderador_nome', $mod_nome );
+        update_post_meta( $denuncia_id, '_data_decisao', $data_agora );
+        wp_update_post( array( 'ID' => $denuncia_id, 'post_status' => 'private' ) );
+
+        wp_send_json_success( array(
+            'mensagem'   => 'Denúncia acolhida e questão excluída permanentemente do banco.',
+            'status'     => 'acolhida',
+            'questao_id' => $id_questao,
+            'moderador'  => $mod_nome,
+            'data'       => $data_agora,
+        ) );
+    } elseif ( $acao_moderacao === 'rejeitar_denuncia' ) {
+        update_post_meta( $denuncia_id, '_status_moderacao', 'rejeitada' );
+        update_post_meta( $denuncia_id, '_moderador_id', $admin_user->ID );
+        update_post_meta( $denuncia_id, '_moderador_nome', $mod_nome );
+        update_post_meta( $denuncia_id, '_data_decisao', $data_agora );
+        wp_update_post( array( 'ID' => $denuncia_id, 'post_status' => 'private' ) );
+
+        wp_send_json_success( array(
+            'mensagem'   => 'Denúncia rejeitada e arquivada. A questão permanece publicada.',
+            'status'     => 'rejeitada',
+            'questao_id' => $id_questao,
+            'moderador'  => $mod_nome,
+            'data'       => $data_agora,
+        ) );
+    }
+
+    wp_send_json_error( array( 'mensagem' => 'Ação de moderação desconhecida.' ), 400 );
 }
 
 // Admin → Moderação | Aluno → Home
@@ -849,6 +1018,10 @@ add_filter( 'login_redirect', function( $redirect_to, $request, $user ) {
 // ==============================================================================
 add_action( 'init', 'unilab_garantir_configuracoes_apresentacao', 10 );
 function unilab_garantir_configuracoes_apresentacao() {
+    if ( get_option( 'unilab_bootstrap_v2_done' ) ) {
+        return;
+    }
+
     // 1. Garante que a página 'central-de-moderacao' existe e tem o template correto
     $pagina_mod = get_page_by_path( 'central-de-moderacao' );
     if ( ! $pagina_mod ) {
@@ -860,10 +1033,10 @@ function unilab_garantir_configuracoes_apresentacao() {
             'post_content' => ''
         ) );
         if ( $mod_id && ! is_wp_error( $mod_id ) ) {
-            update_post_meta( $mod_id, '_wp_page_template', 'template-moderação.php' );
+            update_post_meta( $mod_id, '_wp_page_template', 'template-moderacao.php' );
         }
     } else {
-        update_post_meta( $pagina_mod->ID, '_wp_page_template', 'template-moderação.php' );
+        update_post_meta( $pagina_mod->ID, '_wp_page_template', 'template-moderacao.php' );
     }
 
     // 2. Garante usuário david com senha 12345 e papel administrator
@@ -879,7 +1052,6 @@ function unilab_garantir_configuracoes_apresentacao() {
             wp_update_user( array( 'ID' => $uid, 'display_name' => 'David' ) );
         }
     } else {
-        wp_set_password( '12345', $user_david->ID );
         if ( ! in_array( 'administrator', (array) $user_david->roles ) ) {
             $user_david->set_role( 'administrator' );
         }
@@ -895,9 +1067,10 @@ function unilab_garantir_configuracoes_apresentacao() {
             wp_update_user( array( 'ID' => $uid, 'display_name' => 'admin_moderador' ) );
         }
     } else {
-        wp_set_password( '12345', $user_admin->ID );
         if ( ! in_array( 'administrator', (array) $user_admin->roles ) ) {
             $user_admin->set_role( 'administrator' );
         }
     }
+
+    update_option( 'unilab_bootstrap_v2_done', 1 );
 }

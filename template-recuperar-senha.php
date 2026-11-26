@@ -13,20 +13,16 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_recuperar_se
     if ( empty( $user_input ) ) {
         $mensagem_erro = 'Por favor, digite seu e-mail institucional ou usuário.';
     } else {
-        // Tenta localizar usuário por e-mail ou login
+        // Tenta localizar usuário por e-mail ou login sem vazar existência (RF03)
         $user_data = is_email( $user_input ) ? get_user_by( 'email', $user_input ) : get_user_by( 'login', $user_input );
 
-        if ( ! $user_data ) {
-            $mensagem_erro = 'Nenhuma conta de estudante foi encontrada com as informações fornecidas.';
-        } else {
+        if ( $user_data ) {
             // Utiliza o fluxo seguro de redefinição de senha do WordPress
-            $result = retrieve_password( $user_data->user_login );
-            if ( is_wp_error( $result ) ) {
-                $mensagem_erro = 'Não foi possível enviar o e-mail: ' . $result->get_error_message();
-            } else {
-                $mensagem_sucesso = 'As instruções de recuperação foram enviadas para o e-mail informado. Verifique sua caixa de entrada e spam.';
-            }
+            retrieve_password( $user_data->user_login );
         }
+
+        // Mensagem sempre neutra conforme especificação da Fase 2 (RF03)
+        $mensagem_sucesso = 'Se houver uma conta cadastrada para os dados informados, enviaremos as instruções de recuperação com link de uso único. Verifique sua caixa de entrada e spam.';
     }
 }
 ?>

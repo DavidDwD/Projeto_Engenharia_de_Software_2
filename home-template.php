@@ -11,19 +11,62 @@ $nome_aluno    = $esta_logado ? ($usuario_atual->first_name ?: $usuario_atual->d
 $iniciais      = $esta_logado ? strtoupper( substr( trim($nome_aluno), 0, 2 ) ) : 'UN';
 
 // 2. Parâmetros de Filtro e Busca (RF25, RF26, RF27, RF08, RF09, RF31)
-$termo_busca      = isset($_GET['busca_q']) ? sanitize_text_field($_GET['busca_q']) : '';
-$filtro_disc      = isset($_GET['filtro_disc']) ? sanitize_text_field($_GET['filtro_disc']) : '';
+$termo_busca      = isset($_GET['busca_q']) ? trim( sanitize_text_field($_GET['busca_q']) ) : '';
+$filtro_cat       = isset($_GET['filtro_cat']) ? sanitize_text_field($_GET['filtro_cat']) : '';
+$filtro_sub       = isset($_GET['filtro_sub']) ? sanitize_text_field($_GET['filtro_sub']) : '';
+$raw_disc         = isset($_GET['filtro_disc']) ? $_GET['filtro_disc'] : array();
+$filtros_disc     = is_array($raw_disc) ? array_values(array_filter(array_map('sanitize_text_field', $raw_disc))) : ( ! empty($raw_disc) ? array(sanitize_text_field($raw_disc)) : array() );
+if ( ! empty($filtro_sub) && ! in_array($filtro_sub, $filtros_disc, true) ) {
+    $filtros_disc[] = $filtro_sub;
+}
 $filtro_minhas    = ! empty($_GET['minhas']);
 $filtro_favoritos = ! empty($_GET['favoritos']);
 $ordenar          = isset($_GET['ordenar']) ? sanitize_text_field($_GET['ordenar']) : '';
-$paged            = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : ( ( get_query_var( 'page' ) ) ? get_query_var( 'page' ) : 1 );
+$paged            = ( get_query_var( 'paged' ) ) ? intval(get_query_var( 'paged' )) : ( ( get_query_var( 'page' ) ) ? intval(get_query_var( 'page' )) : 1 );
+$paged            = max( 1, $paged );
 
 // URL base da página atual (sem query string)
 $url_pagina_atual = strtok( $_SERVER['REQUEST_URI'], '?' );
 
+// Mapa canônico de disciplinas + termos criados pelo admin no banco (HU38)
+$mapa_disciplinas_base = array(
+    'engenharia_software' => 'Engenharia de Software',
+    'algoritmos'          => 'Algoritmos e Estruturas de Dados',
+    'calculo'             => 'Cálculo Diferencial e Integral',
+    'redes'               => 'Redes de Computadores',
+    'humanidades'         => 'Humanidades e Lusofonia',
+);
+$mapa_aliases_disc = array(
+    'engenharia_software' => array('engenharia_software', 'engenharia-de-software', 'Engenharia de Software'),
+    'algoritmos'          => array('algoritmos', 'algoritmos-e-estruturas-de-dados', 'Algoritmos e Estruturas de Dados'),
+    'calculo'             => array('calculo', 'calculo-diferencial', 'calculo-diferencial-e-integral', 'Cálculo Diferencial e Integral'),
+    'redes'               => array('redes', 'redes-de-computadores', 'Redes de Computadores'),
+    'humanidades'         => array('humanidades', 'humanidades-e-lusofonia', 'Humanidades e Lusofonia'),
+);
+$discs_sidebar = $mapa_disciplinas_base;
+$aliases_conhecidos = array();
+foreach ( $mapa_aliases_disc as $grupo_al ) {
+    foreach ( $grupo_al as $al_item ) {
+        $aliases_conhecidos[] = sanitize_title( $al_item );
+        $aliases_conhecidos[] = mb_strtolower( $al_item );
+    }
+}
+$termos_disc_db = get_terms( array( 'taxonomy' => 'disciplina', 'hide_empty' => false ) );
+if ( ! empty($termos_disc_db) && ! is_wp_error($termos_disc_db) ) {
+    foreach ( $termos_disc_db as $t_db ) {
+        $ja_coberta = in_array( sanitize_title( $t_db->slug ), $aliases_conhecidos, true )
+                   || in_array( mb_strtolower( $t_db->name ), $aliases_conhecidos, true )
+                   || in_array( $t_db->name, $discs_sidebar, true )
+                   || isset( $discs_sidebar[$t_db->slug] );
+        if ( ! $ja_coberta ) {
+            $discs_sidebar[$t_db->slug] = $t_db->name;
+        }
+    }
+}
+
 $args = array(
     'post_type'      => 'questao',
-    'posts_per_page' => 6,
+    'posts_per_page' => 10,
     'paged'          => $paged,
     'post_status'    => 'publish',
     'orderby'        => 'date',
@@ -32,11 +75,24 @@ $args = array(
 
 $titulo_filtro_especial = '';
 
-// Ordenação pelas mais bem avaliadas / curtidas (RF31 / HU23)
+// Ordenação pelas mais bem avaliadas / curtidas (RF31 / HU23) — inclui questões com 0 curtidas sem meta
 if ( $ordenar === 'curtidas' ) {
-    $args['meta_key'] = '_unilab_curtidas_total';
-    $args['orderby']  = 'meta_value_num';
-    $args['order']    = 'DESC';
+    $args['meta_query'] = array(
+        'relation' => 'OR',
+        'curtidas_existentes' => array(
+            'key'     => '_unilab_curtidas_total',
+            'compare' => 'EXISTS',
+            'type'    => 'NUMERIC',
+        ),
+        'curtidas_ausentes' => array(
+            'key'     => '_unilab_curtidas_total',
+            'compare' => 'NOT EXISTS',
+        ),
+    );
+    $args['orderby'] = array(
+        'curtidas_existentes' => 'DESC',
+        'date'                => 'DESC',
+    );
 }
 
 // Filtro "Minhas Questões" (RF08 / HU08)
@@ -63,33 +119,84 @@ if ( $filtro_favoritos ) {
     }
 }
 
+// Busca textual completa: título, conteúdo, metadados (enunciado/assunto/explicação/professor) e tags/disciplinas (RF26 / HU20)
 if ( ! empty($termo_busca) ) {
-    $args['s'] = $termo_busca;
+    global $wpdb;
+    $like = '%' . $wpdb->esc_like( $termo_busca ) . '%';
+    $sql_busca = $wpdb->prepare(
+        "SELECT DISTINCT p.ID
+         FROM {$wpdb->posts} p
+         LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+         LEFT JOIN {$wpdb->term_relationships} tr ON p.ID = tr.object_id
+         LEFT JOIN {$wpdb->term_taxonomy} tt ON tr.term_taxonomy_id = tt.term_taxonomy_id
+         LEFT JOIN {$wpdb->terms} t ON tt.term_id = t.term_id
+         WHERE p.post_type = 'questao'
+           AND p.post_status = 'publish'
+           AND (
+               p.post_title LIKE %s
+               OR p.post_content LIKE %s
+               OR (pm.meta_key IN ('assunto', 'enunciado', 'explicacao', 'nome_professor', 'categoria') AND pm.meta_value LIKE %s)
+               OR (tt.taxonomy IN ('disciplina', 'categoria_disciplina', 'tag_questao') AND t.name LIKE %s)
+           )",
+        $like, $like, $like, $like
+    );
+    $ids_busca = array_map( 'intval', (array) $wpdb->get_col( $sql_busca ) );
+    if ( isset( $args['post__in'] ) ) {
+        $intersecao = array_values( array_intersect( $args['post__in'], $ids_busca ) );
+        $args['post__in'] = ! empty( $intersecao ) ? $intersecao : array( 0 );
+    } else {
+        $args['post__in'] = ! empty( $ids_busca ) ? $ids_busca : array( 0 );
+    }
 }
 
-$filtro_disc_nome = '';
-if ( ! empty($filtro_disc) ) {
-    $term_obj = get_term_by( 'slug', $filtro_disc, 'disciplina' );
-    if ( ! $term_obj ) {
-        $term_obj = get_term_by( 'name', $filtro_disc, 'disciplina' );
+// Filtro por múltiplas disciplinas combinadas + categoria (RF27 / HU21)
+$filtros_disc_nomes = array();
+$termos_slugs_busca = array();
+$termos_nomes_busca = array();
+
+$discs_efetivas = $filtros_disc;
+if ( empty($discs_efetivas) && ! empty($filtro_cat) ) {
+    $mapa_cat_para_disc = array(
+        'engenharia_software' => array('engenharia_software', 'algoritmos', 'redes'),
+        'exatas'              => array('calculo'),
+        'humanidades'         => array('humanidades'),
+    );
+    if ( isset($mapa_cat_para_disc[$filtro_cat]) ) {
+        $discs_efetivas = $mapa_cat_para_disc[$filtro_cat];
     }
-    if ( ! $term_obj && taxonomy_exists( 'categoria_disciplina' ) ) {
-        $term_obj = get_term_by( 'slug', $filtro_disc, 'categoria_disciplina' );
-        if ( ! $term_obj ) {
-            $term_obj = get_term_by( 'name', $filtro_disc, 'categoria_disciplina' );
+}
+
+foreach ( $discs_efetivas as $f_item ) {
+    if ( isset($mapa_aliases_disc[$f_item]) ) {
+        foreach ( $mapa_aliases_disc[$f_item] as $al ) {
+            $termos_slugs_busca[] = $al;
+            $termos_nomes_busca[] = $al;
         }
+        $filtros_disc_nomes[$f_item] = $mapa_disciplinas_base[$f_item];
+    } else {
+        $t_obj = get_term_by( 'slug', $f_item, 'disciplina' ) ?: get_term_by( 'name', $f_item, 'disciplina' );
+        if ( ! $t_obj && taxonomy_exists( 'categoria_disciplina' ) ) {
+            $t_obj = get_term_by( 'slug', $f_item, 'categoria_disciplina' ) ?: get_term_by( 'name', $f_item, 'categoria_disciplina' );
+        }
+        $t_slug = $t_obj ? $t_obj->slug : sanitize_title( $f_item );
+        $t_name = $t_obj ? $t_obj->name : $f_item;
+        $termos_slugs_busca[] = $t_slug;
+        $termos_slugs_busca[] = $f_item;
+        $termos_nomes_busca[] = $t_name;
+        $termos_nomes_busca[] = $f_item;
+        $filtros_disc_nomes[$f_item] = $t_name;
     }
+}
 
-    $term_slug = $term_obj ? $term_obj->slug : sanitize_title( $filtro_disc );
-    $term_name = $term_obj ? $term_obj->name : $filtro_disc;
-    $filtro_disc_nome = $term_name;
-
+if ( ! empty( $termos_slugs_busca ) ) {
+    $termos_slugs_busca = array_values( array_unique( $termos_slugs_busca ) );
+    $termos_nomes_busca = array_values( array_unique( $termos_nomes_busca ) );
     $args['tax_query'] = array(
         'relation' => 'OR',
-        array('taxonomy' => 'disciplina',           'field' => 'slug', 'terms' => array( $term_slug, $filtro_disc )),
-        array('taxonomy' => 'disciplina',           'field' => 'name', 'terms' => array( $term_name, $filtro_disc )),
-        array('taxonomy' => 'categoria_disciplina', 'field' => 'slug', 'terms' => array( $term_slug, $filtro_disc )),
-        array('taxonomy' => 'categoria_disciplina', 'field' => 'name', 'terms' => array( $term_name, $filtro_disc )),
+        array( 'taxonomy' => 'disciplina',           'field' => 'slug', 'terms' => $termos_slugs_busca ),
+        array( 'taxonomy' => 'disciplina',           'field' => 'name', 'terms' => $termos_nomes_busca ),
+        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'slug', 'terms' => $termos_slugs_busca ),
+        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'name', 'terms' => $termos_nomes_busca ),
     );
 }
 
@@ -687,8 +794,8 @@ $total_questoes = $query_feed->found_posts;
     /* RESPONSIVIDADE MOBILE FIGMA (Início e busca — Mobile.svg) */
     @media (max-width: 860px) {
       .figma-top-bar { padding: 0 16px; font-size: 10px; }
-      .figma-navbar { padding: 12px 16px; }
-      .figma-nav-links { display: none; }
+      .figma-navbar { padding: 12px 16px; flex-wrap: wrap; gap: 10px; }
+      .figma-nav-links { display: flex; width: 100%; order: 3; overflow-x: auto; gap: 16px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
       .figma-hero-banner { padding: 36px 16px 32px 16px; }
       .figma-hero-title { font-size: 26px; }
       .figma-hero-subtitle { font-size: 14px; margin-bottom: 24px; }
@@ -761,8 +868,14 @@ $total_questoes = $query_feed->found_posts;
       <p class="figma-hero-subtitle">Explore questões colaborativas elaboradas por estudantes e professores de todos os cursos e campi da UNILAB.</p>
 
       <form method="GET" action="<?php echo esc_url( $url_pagina_atual ); ?>" class="figma-search-pill">
-        <?php if ( ! empty($filtro_disc) ) : ?>
-          <input type="hidden" name="filtro_disc" value="<?php echo esc_attr($filtro_disc); ?>">
+        <?php foreach ( $filtros_disc as $fd ) : ?>
+          <input type="hidden" name="filtro_disc[]" value="<?php echo esc_attr($fd); ?>">
+        <?php endforeach; ?>
+        <?php if ( ! empty($filtro_cat) ) : ?>
+          <input type="hidden" name="filtro_cat" value="<?php echo esc_attr($filtro_cat); ?>">
+        <?php endif; ?>
+        <?php if ( ! empty($ordenar) ) : ?>
+          <input type="hidden" name="ordenar" value="<?php echo esc_attr($ordenar); ?>">
         <?php endif; ?>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"></circle>
@@ -793,7 +906,7 @@ $total_questoes = $query_feed->found_posts;
     </div>
 
     <!-- Tags Discretas de Filtro Ativo -->
-    <?php if ( ! empty($termo_busca) || ! empty($filtro_disc_nome) ) : ?>
+    <?php if ( ! empty($termo_busca) || ! empty($filtros_disc_nomes) || ! empty($filtro_cat) ) : ?>
       <div class="figma-active-tags-row">
         <div class="figma-tags-left">
           <?php if ( ! empty($termo_busca) ) : ?>
@@ -803,15 +916,28 @@ $total_questoes = $query_feed->found_posts;
             </span>
           <?php endif; ?>
 
-          <?php if ( ! empty($filtro_disc_nome) ) : ?>
+          <?php if ( ! empty($filtro_cat) ) : ?>
             <span class="figma-tag-pill">
-              Disciplina: <strong><?php echo esc_html($filtro_disc_nome); ?></strong>
-              <a href="<?php echo esc_url( remove_query_arg('filtro_disc') ); ?>" title="Remover filtro de disciplina">✕</a>
+              Categoria: <strong><?php echo esc_html($filtro_cat); ?></strong>
+              <a href="<?php echo esc_url( remove_query_arg('filtro_cat') ); ?>" title="Remover filtro de categoria">✕</a>
             </span>
           <?php endif; ?>
+
+          <?php foreach ( $filtros_disc_nomes as $slug_rm => $nome_d ) :
+              $restantes = array_values( array_diff( $filtros_disc, array($slug_rm) ) );
+              $url_rm = remove_query_arg( array('filtro_disc', 'filtro_sub') );
+              if ( ! empty($restantes) ) {
+                  $url_rm = add_query_arg( 'filtro_disc', $restantes, $url_rm );
+              }
+          ?>
+            <span class="figma-tag-pill">
+              Disciplina: <strong><?php echo esc_html($nome_d); ?></strong>
+              <a href="<?php echo esc_url( $url_rm ); ?>" title="Remover filtro de disciplina">✕</a>
+            </span>
+          <?php endforeach; ?>
         </div>
 
-        <a href="<?php echo esc_url( $url_pagina_atual ); ?>" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 600;">
+        <a href="<?php echo esc_url( home_url('/') ); ?>" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 600;">
           Limpar todos os filtros
         </a>
       </div>
@@ -823,18 +949,21 @@ $total_questoes = $query_feed->found_posts;
       <!-- Sidebar de Filtros -->
       <aside class="figma-sidebar-card">
         <h3 class="figma-sidebar-title">Filtros Rápidos</h3>
-        <form method="GET" action="<?php echo esc_url( $url_pagina_atual ); ?>">
+        <form method="GET" action="<?php echo esc_url( home_url('/') ); ?>">
           <?php if ( ! empty($termo_busca) ) : ?>
             <input type="hidden" name="busca_q" value="<?php echo esc_attr($termo_busca); ?>">
+          <?php endif; ?>
+          <?php if ( ! empty($ordenar) ) : ?>
+            <input type="hidden" name="ordenar" value="<?php echo esc_attr($ordenar); ?>">
           <?php endif; ?>
 
           <div class="figma-form-group">
             <label for="select-categoria">Categoria / Curso</label>
             <select id="select-categoria" name="filtro_cat">
               <option value="">Todas as categorias</option>
-              <option value="engenharia_software" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'engenharia_software'); ?>>Engenharia de Software</option>
-              <option value="exatas" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'exatas'); ?>>Ciências Exatas</option>
-              <option value="humanidades" <?php selected(isset($_GET['filtro_cat']) && $_GET['filtro_cat'] === 'humanidades'); ?>>Humanidades e Lusofonia</option>
+              <option value="engenharia_software" <?php selected($filtro_cat === 'engenharia_software'); ?>>Engenharia de Software</option>
+              <option value="exatas" <?php selected($filtro_cat === 'exatas'); ?>>Ciências Exatas</option>
+              <option value="humanidades" <?php selected($filtro_cat === 'humanidades'); ?>>Humanidades e Lusofonia</option>
             </select>
           </div>
 
@@ -846,20 +975,22 @@ $total_questoes = $query_feed->found_posts;
           </div>
 
           <div class="figma-form-group">
-            <label for="select-disciplina">Disciplina Específica</label>
-            <select id="select-disciplina" name="filtro_disc">
-              <option value="">Todas as disciplinas</option>
-              <option value="engenharia_software" <?php selected($filtro_disc === 'engenharia_software'); ?>>Engenharia de Software</option>
-              <option value="algoritmos" <?php selected($filtro_disc === 'algoritmos'); ?>>Algoritmos e Estruturas</option>
-              <option value="calculo" <?php selected($filtro_disc === 'calculo'); ?>>Cálculo Diferencial</option>
-              <option value="redes" <?php selected($filtro_disc === 'redes'); ?>>Redes de Computadores</option>
-              <option value="humanidades" <?php selected($filtro_disc === 'humanidades'); ?>>Humanidades e Lusofonia</option>
-            </select>
+            <label>Disciplinas (selecione uma ou várias)</label>
+            <div id="filtro-disciplinas-multi" style="display:flex; flex-direction:column; gap:7px; max-height:190px; overflow-y:auto; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc;">
+              <?php foreach ( $discs_sidebar as $slug_sb => $nome_sb ) :
+                  $chk = in_array($slug_sb, $filtros_disc, true) || in_array($nome_sb, $filtros_disc, true);
+              ?>
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500; color:#334155; cursor:pointer; margin:0;">
+                  <input type="checkbox" name="filtro_disc[]" value="<?php echo esc_attr($slug_sb); ?>" <?php checked($chk); ?> style="width:14px; height:14px; accent-color:#102D5C; flex-shrink:0;">
+                  <span><?php echo esc_html($nome_sb); ?></span>
+                </label>
+              <?php endforeach; ?>
+            </div>
           </div>
 
           <div class="figma-sidebar-actions">
             <button type="submit" class="figma-btn-filtrar">Aplicar Filtros</button>
-            <a href="<?php echo esc_url( $url_pagina_atual ); ?>" class="figma-btn-limpar">Limpar Filtros</a>
+            <a href="<?php echo esc_url( home_url('/') ); ?>" class="figma-btn-limpar">Limpar Filtros</a>
           </div>
         </form>
       </aside>
@@ -877,8 +1008,8 @@ $total_questoes = $query_feed->found_posts;
               </span>
             <?php elseif ( ! empty($termo_busca) ) : ?>
               Resultados para: <em>"<?php echo esc_html($termo_busca); ?>"</em>
-            <?php elseif ( ! empty($filtro_disc_nome) ) : ?>
-              Disciplina: <strong><?php echo esc_html($filtro_disc_nome); ?></strong>
+            <?php elseif ( ! empty($filtros_disc_nomes) ) : ?>
+              Disciplinas: <strong><?php echo esc_html( implode(', ', $filtros_disc_nomes) ); ?></strong>
             <?php else : ?>
               Todas as questões publicadas
             <?php endif; ?>
@@ -900,6 +1031,7 @@ $total_questoes = $query_feed->found_posts;
               $materia = ( ! empty($terms) && ! is_wp_error($terms) ) ? $terms[0]->name : ( get_post_meta( get_the_ID(), 'categoria', true ) ?: 'Engenharia de Software' );
               $enunciado_curto = wp_trim_words( get_field('enunciado') ?: get_the_content(), 22, '...' );
               $autor           = get_the_author() ?: 'Estudante UNILAB';
+              $prof_card       = get_post_meta( get_the_ID(), 'nome_professor', true );
               $likes_total     = intval( get_post_meta( get_the_ID(), '_unilab_curtidas_total', true ) );
               $esta_favoritado = $esta_logado && in_array( get_the_ID(), (array) get_user_meta( get_current_user_id(), '_unilab_favoritos', true ) );
           ?>
@@ -907,6 +1039,9 @@ $total_questoes = $query_feed->found_posts;
               <div class="figma-card-badges">
                 <span class="badge-primary"><?php echo esc_html( $materia ); ?></span>
                 <span class="badge-secondary">Múltipla escolha</span>
+                <?php if ( ! empty($prof_card) ) : ?>
+                  <span class="badge-secondary">Prof.: <?php echo esc_html( $prof_card ); ?></span>
+                <?php endif; ?>
                 <?php if ( $esta_favoritado ) : ?>
                   <span class="badge-secondary" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">⭐ Salva</span>
                 <?php endif; ?>
@@ -943,13 +1078,13 @@ $total_questoes = $query_feed->found_posts;
 
           <div class="figma-pagination-row">
             <div class="figma-pagination-info">
-              Página <?php echo max( 1, get_query_var('paged') ); ?> de <?php echo $query_feed->max_num_pages; ?> (Total: <?php echo $total_questoes; ?> questões)
+              Página <?php echo $paged; ?> de <?php echo max( 1, $query_feed->max_num_pages ); ?> (Total: <?php echo $total_questoes; ?> questões)
             </div>
             <div class="figma-pagination-nav">
               <?php
               echo paginate_links( array(
                   'total'     => $query_feed->max_num_pages,
-                  'current'   => max( 1, get_query_var('paged') ),
+                  'current'   => $paged,
                   'prev_text' => 'Anterior',
                   'next_text' => 'Próxima',
                   'class'     => 'figma-page-btn'
@@ -1019,13 +1154,11 @@ $total_questoes = $query_feed->found_posts;
 
   var selCat  = document.getElementById('select-categoria');
   var selSub  = document.getElementById('select-subcategoria');
-  var selDisc = document.getElementById('select-disciplina');
+  var boxDisc = document.getElementById('filtro-disciplinas-multi');
 
-  if ( selCat && selSub && selDisc ) {
-    selCat.addEventListener('change', function() {
-      var cat = this.value;
+  if ( selCat && selSub ) {
+    function popularSubcategorias(cat) {
       selSub.innerHTML = '<option value="">Todas as subcategorias</option>';
-
       if ( mapa[cat] ) {
         mapa[cat].forEach(function(item) {
           var opt = document.createElement('option');
@@ -1033,14 +1166,21 @@ $total_questoes = $query_feed->found_posts;
           opt.textContent = item.label;
           selSub.appendChild(opt);
         });
-      } else {
-        selSub.innerHTML = '<option value="">Selecione uma categoria primeiro</option>';
       }
+    }
+
+    if ( selCat.value ) {
+      popularSubcategorias(selCat.value);
+    }
+
+    selCat.addEventListener('change', function() {
+      popularSubcategorias(this.value);
     });
 
     selSub.addEventListener('change', function() {
-      if ( this.value ) {
-        selDisc.value = this.value;
+      if ( this.value && boxDisc ) {
+        var cb = boxDisc.querySelector('input[type="checkbox"][value="' + this.value + '"]');
+        if ( cb ) cb.checked = true;
       }
     });
   }
