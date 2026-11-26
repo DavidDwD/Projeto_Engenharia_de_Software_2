@@ -43,9 +43,17 @@ foreach ( $posts_denuncias as $d ) {
 
     // Pega o texto, link e autor da questão original
     $questao_post  = $id_questao > 0 ? get_post( $id_questao ) : null;
-    $texto_questao = $questao_post ? wp_trim_words( $questao_post->post_content ?: $questao_post->post_title, 20, '...' ) : ( get_post_meta( $d->ID, '_questao_titulo_snapshot', true ) ?: 'Questão não encontrada' );
-    $autor_questao = $questao_post ? ( get_the_author_meta( 'display_name', $questao_post->post_author ) ?: 'Autor' ) : 'Autor';
-    $questao_url   = ( $questao_post && $questao_post->post_status === 'publish' ) ? get_permalink( $id_questao ) : '';
+    if ( ! $questao_post || $questao_post->post_type !== 'questao' || $questao_post->post_status !== 'publish' ) {
+        // Arquiva automaticamente denúncia órfã de questão já removida (RF36 / RN07 / HU27)
+        update_post_meta( $d->ID, '_status_moderacao', 'questao_excluida_admin' );
+        update_post_meta( $d->ID, '_moderador_nome', 'Limpeza Automática' );
+        update_post_meta( $d->ID, '_data_decisao', current_time( 'mysql' ) );
+        wp_update_post( array( 'ID' => $d->ID, 'post_status' => 'private' ) );
+        continue;
+    }
+    $texto_questao = wp_trim_words( $questao_post->post_content ?: $questao_post->post_title, 20, '...' );
+    $autor_questao = get_the_author_meta( 'display_name', $questao_post->post_author ) ?: 'Autor';
+    $questao_url   = get_permalink( $id_questao );
 
     $items_reais[] = array(
         'id'          => $d->ID,
@@ -153,15 +161,13 @@ h2{margin:0;font-size:19px;display:flex;gap:8px;align-items:center}
 .acts{display:flex;gap:8px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
 .scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:900px}
+table{width:100%;border-collapse:collapse;min-width:860px}
 th{text-align:left;font-size:11px;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:12px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
 td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
-tr.row.sel-on td{background:var(--blue-bg)}
 .rm{animation:out .3s forwards}
 @keyframes out{to{opacity:0;transform:translateX(24px)}}
 .new td{animation:flash 1.6s}
 @keyframes flash{from{background:var(--blue-bg)}}
-input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
 .id{font-size:11px;color:var(--muted);font-weight:600}
 .pr{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:99px;padding:1px 8px;margin:5px 0}
 .pr::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
@@ -200,6 +206,28 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
 .mf .btn{height:42px;padding:0 20px;font-size:15px;font-weight:600;border-radius:10px}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:#1b1e25;color:#fff;border-radius:10px;padding:11px 16px;opacity:0;pointer-events:none;transition:.25s;z-index:60;display:flex;gap:8px;align-items:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* RESPONSIVIDADE MOBILE / TABLET (RNF05) */
+@media (max-width: 960px) {
+  body{flex-direction:column}
+  aside{width:100%;height:auto;position:static;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 16px}
+  .brand{padding:0 12px 0 0;margin-right:auto}
+  .grp,.status,.me{display:none}
+  .nav{width:auto;padding:7px 10px;font-size:13px}
+  .top{padding:10px 16px}
+  .wrap{padding:16px}
+  .filters{flex-direction:column;align-items:stretch}
+  .filters .search,.filters .sel,.filters .push{width:100%;margin-left:0}
+}
+@media (max-width: 720px) {
+  table, thead, tbody, tr, td{display:block;min-width:0;width:100%}
+  thead{display:none}
+  tr.row, #tbHist tr{border-bottom:2px solid var(--line);padding:12px 14px}
+  td{padding:6px 0;border:0}
+  .post,.just{max-width:none}
+  .qa{flex-direction:row;flex-wrap:wrap}
+  .qa .btn{flex:1}
+}
 </style>
 </head>
 <body>
@@ -252,7 +280,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue)}
       <div class="card">
         <div class="scroll">
           <table>
-            <thead><tr><th style="width:40px"><input type="checkbox" id="all"></th><th>TRIAGEM</th><th>QUESTÃO DENUNCIADA</th><th>JUSTIFICATIVA DO ALUNO</th><th>SINAIS</th><th>AÇÕES RÁPIDAS</th></tr></thead>
+            <thead><tr><th>TRIAGEM</th><th>QUESTÃO DENUNCIADA</th><th>JUSTIFICATIVA DO ALUNO</th><th>SINAIS</th><th>AÇÕES RÁPIDAS</th></tr></thead>
             <tbody id="tb"></tbody>
           </table>
         </div>
@@ -302,7 +330,7 @@ let historico = <?php echo $historico_json; ?>; // HISTÓRICO REAL DE DECISÕES
 const $ = s => document.querySelector(s), P = {Alta:0, Média:1, Baixa:2};
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = m => m < 60 ? `há ${m} min` : `há ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")} min`;
-let pending = null, selected = new Set();
+let pending = null;
 
 REASONS.forEach(r => $("#fm").insertAdjacentHTML("beforeend", `<option>${r}</option>`));
 
@@ -313,10 +341,9 @@ function view(){
   const o = $("#so").value;
   l.sort(o === "pri" ? (a,b) => P[a.pri] - P[b.pri] || a.ago - b.ago : (a,b) => a.ago - b.ago);
 
-  $("#tb").innerHTML = l.map(i => `<tr class="row ${selected.has(i.id)?"sel-on":""}" data-id="${i.id}">
-   <td><input type="checkbox" data-sel="${i.id}" ${selected.has(i.id)?"checked":""}></td>
+  $("#tb").innerHTML = l.map(i => `<tr class="row" data-id="${i.id}">
    <td><div class="id">#DN-${i.id}</div><span class="pr ${esc(i.pri)}">${esc(i.pri)}</span><div class="tm">${fmt(i.ago)}</div></td>
-   <td><div class="post"><div class="who"><span class="tag">Questão</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q>${i.questao_url ? `<a class="ctx" href="${esc(i.questao_url)}" target="_blank" rel="noopener noreferrer">Ver questão denunciada ↗</a>` : `<span class="tl">Questão indisponível</span>`}</div></td>
+   <td><div class="post"><div class="who"><span class="tag">Questão</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q><a class="ctx" href="${esc(i.questao_url)}" target="_blank" rel="noopener noreferrer">Ver questão denunciada ↗</a></div></td>
    <td><span class="mot">${esc(i.mot)}</span><div class="just">${esc(i.why)}<div style="margin-top:4px;font-size:11px;color:#475569;">Denunciado por: <strong>${esc(i.reporter)}</strong></div></div></td>
    <td class="sig"><b>🚩 ${i.n} sinalização</b><small>${esc(i.sub)}</small></td>
    <td><div class="qa">
@@ -388,22 +415,7 @@ $("#tabHistorico").addEventListener("click", () => {
 });
 
 document.addEventListener("click", async e => {
-  const t = e.target.closest("button,input"); if(!t) return;
-  if(t.id === "all"){
-    const rows = [...document.querySelectorAll("[data-sel]")];
-    if(t.checked){
-      rows.forEach(cb => selected.add(+cb.dataset.sel));
-    } else {
-      selected.clear();
-    }
-    view();
-    return;
-  } else if(t.dataset && t.dataset.sel){
-    const sid = +t.dataset.sel;
-    if(t.checked) selected.add(sid); else selected.delete(sid);
-    view();
-    return;
-  }
+  const t = e.target.closest("button"); if(!t) return;
   if(t.dataset.del){
     pending = +t.dataset.del;
     $("#ov1").classList.add("open");

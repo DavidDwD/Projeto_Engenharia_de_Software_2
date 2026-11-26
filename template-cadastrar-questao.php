@@ -51,7 +51,7 @@ if ( $id_edicao > 0 ) {
     $post_edicao = get_post( $id_edicao );
     if ( $post_edicao && $post_edicao->post_type === 'questao' ) {
         $autor_id = intval( $post_edicao->post_author );
-        if ( $esta_logado && ( $autor_id === get_current_user_id() || current_user_can( 'edit_post', $id_edicao ) ) ) {
+        if ( $esta_logado && $autor_id === get_current_user_id() ) {
             $dados_preenchidos = unilab_carregar_dados_questao_edicao( $id_edicao );
         } else {
             $permissao_negada = true;
@@ -163,7 +163,23 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         $erro_upload = 'O tamanho total somado dos anexos ultrapassou o limite de 20 MB (RN03).';
     }
 
-    // Validação estrita de regras de negócio no servidor (RN08 / RF11-RF15 / RN05)
+    // Normalização e validação do limite máximo de 10 tags por questão (RF16 / HU11)
+    $lista_tags_limpa = array();
+    $tags_lower_seen  = array();
+    if ( ! empty( $tags_livres ) ) {
+        foreach ( explode( ',', $tags_livres ) as $t_raw ) {
+            $t_trim = trim( $t_raw );
+            if ( $t_trim === '' ) continue;
+            $t_low = mb_strtolower( $t_trim );
+            if ( ! in_array( $t_low, $tags_lower_seen, true ) ) {
+                $tags_lower_seen[]  = $t_low;
+                $lista_tags_limpa[] = $t_trim;
+            }
+        }
+    }
+    $dados_preenchidos['tags_livres'] = implode( ', ', $lista_tags_limpa );
+
+    // Validação estrita de regras de negócio no servidor (RN08 / RF11-RF16 / RN05)
     $alts_map = array('A' => $alt_a, 'B' => $alt_b, 'C' => $alt_c, 'D' => $alt_d, 'E' => $alt_e);
     $tam_enunciado = mb_strlen( trim( wp_strip_all_tags( $enunciado ) ) );
     if ( empty( $assunto ) || mb_strlen( $assunto ) < 3 ) {
@@ -180,15 +196,17 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         $mensagem_erro = 'A explicação teórica da resposta correta é obrigatória (RN08 / RF13).';
     } elseif ( empty( $categoria ) ) {
         $mensagem_erro = 'Selecione uma disciplina para a questão (RF15).';
+    } elseif ( count( $lista_tags_limpa ) > 10 ) {
+        $mensagem_erro = 'Você pode adicionar no máximo 10 tags por questão (RF16).';
     } elseif ( ! empty( $link_raw ) && ( ! preg_match( '#^https?://#i', $link_raw ) || ! filter_var( $link_raw, FILTER_VALIDATE_URL ) ) ) {
         $mensagem_erro = 'O link externo informado é inválido. Use um endereço web começando com http:// ou https:// (RN05).';
     } elseif ( ! empty( $erro_upload ) ) {
         $mensagem_erro = $erro_upload;
     } else {
         if ( $id_post_salvar > 0 ) {
-            // Fluxo de Atualização (RF34)
+            // Fluxo de Atualização (RF34 / RN02)
             $post_atualizar = get_post( $id_post_salvar );
-            if ( $post_atualizar && ( intval( $post_atualizar->post_author ) === get_current_user_id() || current_user_can( 'edit_post', $id_post_salvar ) ) ) {
+            if ( $post_atualizar && intval( $post_atualizar->post_author ) === get_current_user_id() ) {
                 wp_update_post( array(
                     'ID'           => $id_post_salvar,
                     'post_title'   => $assunto,
@@ -224,9 +242,8 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         update_post_meta( $post_id, 'link_externo', esc_url_raw( $_POST['link_externo'] ?? '' ) );
         update_post_meta( $post_id, 'nome_professor', $nome_professor );
 
-        if ( ! empty( $tags_livres ) ) {
-            $lista_tags = array_values( array_unique( array_filter( array_map( 'trim', explode( ',', $tags_livres ) ) ) ) );
-            wp_set_object_terms( $post_id, $lista_tags, 'tag_questao', false );
+        if ( ! empty( $lista_tags_limpa ) ) {
+            wp_set_object_terms( $post_id, $lista_tags_limpa, 'tag_questao', false );
         } else {
             wp_set_object_terms( $post_id, array(), 'tag_questao', false );
         }
@@ -422,6 +439,104 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
       top: 0;
       z-index: 999;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    body.admin-bar .figma-navbar { top: 32px; }
+    @media (max-width: 782px) { body.admin-bar .figma-navbar { top: 46px; } }
+
+    /* COMPONENTE MULTI-TAG COM AUTOCOMPLETE AJAX (RF16 / HU11) */
+    .figma-two-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .unilab-tags-wrapper {
+      position: relative;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 8px 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-height: 44px;
+      transition: border-color 0.15s ease;
+    }
+    .unilab-tags-wrapper:focus-within {
+      border-color: #102D5C;
+      box-shadow: 0 0 0 3px rgba(16, 45, 92, 0.1);
+    }
+    .unilab-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+      border-radius: 99px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .unilab-tag-chip button {
+      background: none;
+      border: 0;
+      color: #1e40af;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+      font-size: 13px;
+    }
+    .unilab-tag-chip button:hover {
+      color: #dc2626;
+    }
+    .unilab-tag-input {
+      border: 0 !important;
+      outline: none !important;
+      box-shadow: none !important;
+      flex: 1;
+      min-width: 140px;
+      padding: 4px 6px !important;
+      font-size: 14px;
+      background: transparent;
+      color: #0f172a;
+    }
+    .unilab-tags-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+      z-index: 1000;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .unilab-tags-option {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 0;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 9px 14px;
+      font-size: 13px;
+      color: #1e293b;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .unilab-tags-option:last-child { border-bottom: 0; }
+    .unilab-tags-option:hover, .unilab-tags-option.ativo {
+      background: #eff6ff;
+      color: #102D5C;
+      font-weight: 600;
+    }
+    @media (max-width: 860px) {
+      .figma-two-cols { grid-template-columns: 1fr; }
     }
 
     .figma-navbar-brand {
@@ -959,7 +1074,7 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
               </select>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;" class="figma-field-group">
+            <div class="figma-field-group figma-two-cols">
               <div>
                 <label class="figma-label" for="nome_professor">Professor / Docente (opcional)</label>
                 <input type="text" id="nome_professor" name="nome_professor" list="lista-professores-existentes" class="figma-input" placeholder="Ex: Prof. Ramon Vieira" value="<?php echo esc_attr( $dados_preenchidos['nome_professor'] ?? '' ); ?>">
@@ -973,17 +1088,14 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
                 </datalist>
               </div>
               <div>
-                <label class="figma-label" for="tags_livres">Tags / Palavras-chave (opcional)</label>
-                <input type="text" id="tags_livres" name="tags_livres" list="lista-tags-existentes" class="figma-input" placeholder="Ex: mvc, arquitetura, requisitos" value="<?php echo esc_attr( $dados_preenchidos['tags_livres'] ?? '' ); ?>">
-                <datalist id="lista-tags-existentes">
-                  <?php
-                  $tags_db = get_terms( array( 'taxonomy' => 'tag_questao', 'hide_empty' => false, 'number' => 20 ) );
-                  if ( ! empty( $tags_db ) && ! is_wp_error( $tags_db ) ) :
-                      foreach ( $tags_db as $t_obj ) : ?>
-                        <option value="<?php echo esc_attr( $t_obj->name ); ?>">
-                      <?php endforeach;
-                  endif; ?>
-                </datalist>
+                <label class="figma-label" for="tag_input_digitacao">Tags / Palavras-chave (opcional, máx. 10) <span id="tags-contador-badge" style="font-weight:600; color:#64748b; font-size:11px; margin-left:4px;">0/10</span></label>
+                <div class="unilab-tags-wrapper" id="unilab-tags-wrapper">
+                  <div id="tags-chips-container" style="display:contents;"></div>
+                  <input type="text" id="tag_input_digitacao" class="unilab-tag-input" placeholder="Digite 2+ letras, vírgula ou Enter..." autocomplete="off">
+                  <input type="hidden" id="tags_livres" name="tags_livres" value="<?php echo esc_attr( $dados_preenchidos['tags_livres'] ?? '' ); ?>">
+                  <div id="tags-autocomplete-dropdown" class="unilab-tags-dropdown" hidden></div>
+                </div>
+                <div id="tags-limite-aviso" class="figma-input-hint">Separe por vírgula ou Enter. Sugestões aparecem a partir de 2 caracteres (máx. 10 tags).</div>
               </div>
             </div>
 
@@ -1116,6 +1228,192 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
   </footer>
 
 </div>
+
+<script>
+(function() {
+  var AJAX_URL = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+  var MAX_TAGS = 10;
+
+  var hiddenInput = document.getElementById('tags_livres');
+  var textInput   = document.getElementById('tag_input_digitacao');
+  var chipsBox    = document.getElementById('tags-chips-container');
+  var dropdown    = document.getElementById('tags-autocomplete-dropdown');
+  var contador    = document.getElementById('tags-contador-badge');
+  var avisoHint   = document.getElementById('tags-limite-aviso');
+  var form        = document.getElementById('form-cadastro-questao');
+
+  if (!hiddenInput || !textInput || !chipsBox || !dropdown) return;
+
+  var tags = [];
+  var debounceTimer = null;
+
+  function sincronizarHidden() {
+    hiddenInput.value = tags.join(', ');
+    if (contador) contador.textContent = tags.length + '/' + MAX_TAGS;
+    if (tags.length >= MAX_TAGS) {
+      textInput.placeholder = 'Limite de 10 tags atingido';
+    } else {
+      textInput.placeholder = 'Digite 2+ letras, vírgula ou Enter...';
+    }
+  }
+
+  function mostrarAviso(msg, isError) {
+    if (!avisoHint) return;
+    avisoHint.textContent = msg;
+    avisoHint.style.color = isError ? '#dc2626' : '#64748b';
+  }
+
+  function renderChips() {
+    chipsBox.innerHTML = '';
+    tags.forEach(function(tag, idx) {
+      var chip = document.createElement('span');
+      chip.className = 'unilab-tag-chip';
+      var lbl = document.createElement('span');
+      lbl.textContent = '#' + tag;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.title = 'Remover tag';
+      btn.setAttribute('aria-label', 'Remover tag ' + tag);
+      btn.textContent = '×';
+      btn.addEventListener('click', function() {
+        tags.splice(idx, 1);
+        renderChips();
+        sincronizarHidden();
+        mostrarAviso('Separe por vírgula ou Enter. Sugestões aparecem a partir de 2 caracteres (máx. 10 tags).', false);
+      });
+      chip.appendChild(lbl);
+      chip.appendChild(btn);
+      chipsBox.appendChild(chip);
+    });
+    sincronizarHidden();
+  }
+
+  function fecharDropdown() {
+    dropdown.hidden = true;
+    dropdown.innerHTML = '';
+  }
+
+  function adicionarTag(raw) {
+    var limpa = String(raw || '').trim();
+    if (!limpa) return false;
+    if (tags.length >= MAX_TAGS) {
+      mostrarAviso('Limite máximo de 10 tags por questão atingido (RF16).', true);
+      return false;
+    }
+    var jaExiste = tags.some(function(t) { return t.toLowerCase() === limpa.toLowerCase(); });
+    if (jaExiste) {
+      mostrarAviso('A tag "' + limpa + '" já foi adicionada a esta questão (HU11).', true);
+      return false;
+    }
+    tags.push(limpa);
+    renderChips();
+    mostrarAviso('Separe por vírgula ou Enter. Sugestões aparecem a partir de 2 caracteres (máx. 10 tags).', false);
+    return true;
+  }
+
+  // Inicializa chips se já vier preenchido (modo edição ou retorno com erro)
+  if (hiddenInput.value.trim()) {
+    hiddenInput.value.split(',').forEach(function(part) {
+      adicionarTag(part);
+    });
+  } else {
+    sincronizarHidden();
+  }
+
+  function buscarSugestoesAjax(termo) {
+    if (termo.length < 2 || tags.length >= MAX_TAGS) {
+      fecharDropdown();
+      return;
+    }
+    var params = new URLSearchParams({
+      action: 'unilab_sugerir_tags',
+      termo: termo,
+      excluir: tags.join(',')
+    });
+    fetch(AJAX_URL + '?' + params.toString(), { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(json) {
+        if (!json || !json.success || !json.data || !Array.isArray(json.data.tags) || json.data.tags.length === 0) {
+          fecharDropdown();
+          return;
+        }
+        dropdown.innerHTML = '';
+        json.data.tags.slice(0, 10).forEach(function(sugestao) {
+          var opt = document.createElement('button');
+          opt.type = 'button';
+          opt.className = 'unilab-tags-option';
+          opt.innerHTML = '<span>#' + sugestao.replace(/[<>&"]/g, function(c) { return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }) + '</span><span style="font-size:11px; color:#64748b;">Selecionar</span>';
+          opt.addEventListener('mousedown', function(ev) {
+            ev.preventDefault();
+            adicionarTag(sugestao);
+            textInput.value = '';
+            fecharDropdown();
+            textInput.focus();
+          });
+          dropdown.appendChild(opt);
+        });
+        dropdown.hidden = false;
+      })
+      .catch(function() {
+        fecharDropdown();
+      });
+  }
+
+  textInput.addEventListener('input', function() {
+    var val = textInput.value;
+    // Se usuário digitou vírgula, converte trecho(s) antes da vírgula em chips e limpa para a próxima tag!
+    if (val.indexOf(',') !== -1) {
+      var partes = val.split(',');
+      var resto = partes.pop();
+      partes.forEach(function(p) {
+        adicionarTag(p);
+      });
+      textInput.value = resto.replace(/^\s+/, '');
+    }
+
+    var termoAtual = textInput.value.trim();
+    clearTimeout(debounceTimer);
+    if (termoAtual.length < 2) {
+      fecharDropdown();
+      return;
+    }
+    debounceTimer = setTimeout(function() {
+      buscarSugestoesAjax(termoAtual);
+    }, 150);
+  });
+
+  textInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      if (textInput.value.trim()) {
+        if (adicionarTag(textInput.value)) {
+          textInput.value = '';
+          fecharDropdown();
+        }
+      }
+    } else if (e.key === 'Backspace' && textInput.value === '' && tags.length > 0) {
+      tags.pop();
+      renderChips();
+    } else if (e.key === 'Escape') {
+      fecharDropdown();
+    }
+  });
+
+  textInput.addEventListener('blur', function() {
+    setTimeout(fecharDropdown, 180);
+  });
+
+  if (form) {
+    form.addEventListener('submit', function() {
+      if (textInput.value.trim()) {
+        adicionarTag(textInput.value);
+        textInput.value = '';
+      }
+      sincronizarHidden();
+    });
+  }
+})();
+</script>
 
 <?php wp_footer(); ?>
 </body>

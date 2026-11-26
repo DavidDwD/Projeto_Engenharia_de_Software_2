@@ -27,7 +27,8 @@ $foi_editada    = ( $ts_mod && $ts_pub && ( $ts_mod - $ts_pub ) > 60 );
 
 $usuario_atual_id = get_current_user_id();
 $autor_id = intval( get_post_field( 'post_author', get_the_ID() ) );
-$eh_autor = is_user_logged_in() && ( $usuario_atual_id === $autor_id || current_user_can( 'edit_post', get_the_ID() ) );
+$eh_autor = is_user_logged_in() && ( $usuario_atual_id === $autor_id );
+$eh_admin_moderador = is_user_logged_in() && ! $eh_autor && current_user_can( 'manage_options' );
 
 $nome_autor = get_the_author_meta( 'display_name', $autor_id ) ?: get_the_author_meta( 'user_login', $autor_id ) ?: get_the_author() ?: 'Estudante UNILAB';
 $partes_autor = explode( ' ', trim( $nome_autor ) );
@@ -913,6 +914,18 @@ if ( is_user_logged_in() ) {
                 <button type="submit" class="btn-modal-confirmar">Sim, Excluir Questão</button>
               </div>
             </form>
+          </div>
+        </div>
+      <?php elseif ( $eh_admin_moderador ) : ?>
+        <div class="toolbar-autor" style="background:#f8fafc; border-color:#cbd5e1;">
+          <div class="toolbar-autor-info">
+            <span class="toolbar-autor-badge" style="background:#334155;">Modo Moderação</span>
+            <span class="toolbar-autor-text" style="color:#334155;">Questão publicada por <strong><?php echo esc_html( $nome_autor ); ?></strong>. Use a Central de Moderação para ações administrativas.</span>
+          </div>
+          <div class="toolbar-autor-acoes">
+            <a href="<?php echo esc_url( home_url('/central-de-moderacao/') ); ?>" class="btn-autor-editar">
+              Central de Moderação
+            </a>
           </div>
         </div>
       <?php endif; ?>

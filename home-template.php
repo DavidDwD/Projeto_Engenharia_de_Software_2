@@ -1,4 +1,4 @@
-﻿﻿﻿<?php
+<?php
 /**
  * Template Name: Início e Busca Figma (Pixel Perfect - Dynamic Fullscreen)
  * Banco de Questões — UNILAB
@@ -75,24 +75,21 @@ $args = array(
 
 $titulo_filtro_especial = '';
 
-// Ordenação pelas mais bem avaliadas / curtidas (RF31 / HU23) — inclui questões com 0 curtidas sem meta
+// Ordenação pelas mais bem avaliadas / curtidas (RF31 / HU23) — SQL determinístico com COALESCE(..., 0)
+$unilab_likes_clauses_cb = null;
 if ( $ordenar === 'curtidas' ) {
-    $args['meta_query'] = array(
-        'relation' => 'OR',
-        'curtidas_existentes' => array(
-            'key'     => '_unilab_curtidas_total',
-            'compare' => 'EXISTS',
-            'type'    => 'NUMERIC',
-        ),
-        'curtidas_ausentes' => array(
-            'key'     => '_unilab_curtidas_total',
-            'compare' => 'NOT EXISTS',
-        ),
-    );
-    $args['orderby'] = array(
-        'curtidas_existentes' => 'DESC',
-        'date'                => 'DESC',
-    );
+    $args['unilab_order_by_likes'] = true;
+    $unilab_likes_clauses_cb = function( $clauses, $query ) {
+        if ( ! $query->get( 'unilab_order_by_likes' ) ) {
+            return $clauses;
+        }
+        global $wpdb;
+        $clauses['join']   .= " LEFT JOIN {$wpdb->postmeta} AS unilab_pm_likes ON ({$wpdb->posts}.ID = unilab_pm_likes.post_id AND unilab_pm_likes.meta_key = '_unilab_curtidas_total') ";
+        $clauses['groupby'] = "{$wpdb->posts}.ID";
+        $clauses['orderby'] = " COALESCE(CAST(NULLIF(unilab_pm_likes.meta_value, '') AS UNSIGNED), 0) DESC, {$wpdb->posts}.post_date DESC ";
+        return $clauses;
+    };
+    add_filter( 'posts_clauses', $unilab_likes_clauses_cb, 10, 2 );
 }
 
 // Filtro "Minhas Questões" (RF08 / HU08)
@@ -163,6 +160,9 @@ if ( empty($discs_efetivas) && ! empty($filtro_cat) ) {
     );
     if ( isset($mapa_cat_para_disc[$filtro_cat]) ) {
         $discs_efetivas = $mapa_cat_para_disc[$filtro_cat];
+    } else {
+        // Suporte a qualquer categoria/disciplina pai criada dinamicamente no wp-admin (HU38)
+        $discs_efetivas = array( $filtro_cat );
     }
 }
 
@@ -193,14 +193,17 @@ if ( ! empty( $termos_slugs_busca ) ) {
     $termos_nomes_busca = array_values( array_unique( $termos_nomes_busca ) );
     $args['tax_query'] = array(
         'relation' => 'OR',
-        array( 'taxonomy' => 'disciplina',           'field' => 'slug', 'terms' => $termos_slugs_busca ),
-        array( 'taxonomy' => 'disciplina',           'field' => 'name', 'terms' => $termos_nomes_busca ),
-        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'slug', 'terms' => $termos_slugs_busca ),
-        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'name', 'terms' => $termos_nomes_busca ),
+        array( 'taxonomy' => 'disciplina',           'field' => 'slug', 'terms' => $termos_slugs_busca, 'include_children' => true ),
+        array( 'taxonomy' => 'disciplina',           'field' => 'name', 'terms' => $termos_nomes_busca, 'include_children' => true ),
+        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'slug', 'terms' => $termos_slugs_busca, 'include_children' => true ),
+        array( 'taxonomy' => 'categoria_disciplina', 'field' => 'name', 'terms' => $termos_nomes_busca, 'include_children' => true ),
     );
 }
 
 $query_feed     = new WP_Query( $args );
+if ( $unilab_likes_clauses_cb ) {
+    remove_filter( 'posts_clauses', $unilab_likes_clauses_cb, 10 );
+}
 $total_questoes = $query_feed->found_posts;
 ?>
 <!DOCTYPE html>
@@ -272,6 +275,8 @@ $total_questoes = $query_feed->found_posts;
       z-index: 999;
       box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
+    body.admin-bar .figma-navbar { top: 32px; }
+    @media (max-width: 782px) { body.admin-bar .figma-navbar { top: 46px; } }
 
     .figma-navbar-brand {
       display: flex;
@@ -961,13 +966,45 @@ $total_questoes = $query_feed->found_posts;
             <label for="select-categoria">Categoria / Curso</label>
             <select id="select-categoria" name="filtro_cat">
               <option value="">Todas as categorias</option>
-              <option value="engenharia_software" <?php selected($filtro_cat === 'engenharia_software'); ?>>Engenharia de Software</option>
+              <option value="engenharia_software" <?php selected($filtro_cat === 'engenharia_software'); ?>>Computação e Sistemas</option>
               <option value="exatas" <?php selected($filtro_cat === 'exatas'); ?>>Ciências Exatas</option>
               <option value="humanidades" <?php selected($filtro_cat === 'humanidades'); ?>>Humanidades e Lusofonia</option>
+              <?php
+              $mapa_sub_dinamico = array(
+                  'engenharia_software' => array(
+                      array('label' => 'Engenharia de Software', 'slug' => 'engenharia_software'),
+                      array('label' => 'Algoritmos e Estruturas', 'slug' => 'algoritmos'),
+                      array('label' => 'Redes de Computadores', 'slug' => 'redes'),
+                  ),
+                  'exatas' => array(
+                      array('label' => 'Cálculo Diferencial', 'slug' => 'calculo'),
+                  ),
+                  'humanidades' => array(
+                      array('label' => 'Humanidades e Lusofonia', 'slug' => 'humanidades'),
+                  ),
+              );
+              if ( ! empty($termos_disc_db) && ! is_wp_error($termos_disc_db) ) {
+                  foreach ( $termos_disc_db as $t_cat ) {
+                      if ( intval($t_cat->parent) === 0 ) {
+                          $children = get_terms( array( 'taxonomy' => 'disciplina', 'hide_empty' => false, 'parent' => $t_cat->term_id ) );
+                          if ( ! empty($children) && ! is_wp_error($children) ) {
+                              if ( ! in_array($t_cat->slug, array('engenharia_software', 'engenharia-de-software', 'exatas', 'humanidades', 'humanidades-e-lusofonia'), true) ) {
+                                  echo '<option value="' . esc_attr($t_cat->slug) . '" ' . selected($filtro_cat === $t_cat->slug, true, false) . '>' . esc_html($t_cat->name) . '</option>';
+                              }
+                              $arr_ch = array();
+                              foreach ( $children as $ch ) {
+                                  $arr_ch[] = array( 'label' => $ch->name, 'slug' => $ch->slug );
+                              }
+                              $mapa_sub_dinamico[$t_cat->slug] = $arr_ch;
+                          }
+                      }
+                  }
+              }
+              ?>
             </select>
           </div>
 
-          <div class="figma-form-group">
+          <div class="figma-form-group" id="grupo-subcategoria" style="<?php echo empty($filtro_cat) ? 'display:none;' : ''; ?>">
             <label for="select-subcategoria">Subcategoria</label>
             <select id="select-subcategoria" name="filtro_sub">
               <option value="">Todas as subcategorias</option>
@@ -1045,7 +1082,7 @@ $total_questoes = $query_feed->found_posts;
                 <?php if ( $esta_favoritado ) : ?>
                   <span class="badge-secondary" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">⭐ Salva</span>
                 <?php endif; ?>
-                <?php if ( is_user_logged_in() && ( intval(get_the_author_meta('ID')) === get_current_user_id() || current_user_can('edit_post', get_the_ID()) ) ) : ?>
+                <?php if ( is_user_logged_in() && intval(get_the_author_meta('ID')) === get_current_user_id() ) : ?>
                   <a href="<?php echo esc_url( home_url('/cadastrar-questao/?editar=' . get_the_ID()) ); ?>" style="margin-left:auto; font-size:12px; font-weight:600; color:#0284c7; text-decoration:none; background:#e0f2fe; padding:3px 10px; border-radius:12px; display:inline-flex; align-items:center; gap:4px;">
                     ✏️ Editar minha questão
                   </a>
@@ -1138,42 +1175,37 @@ $total_questoes = $query_feed->found_posts;
 
 <script>
 (function() {
-  var mapa = {
-    'engenharia_software': [
-      { label: 'Engenharia de Software', slug: 'engenharia_software' },
-      { label: 'Algoritmos e Estruturas', slug: 'algoritmos' },
-      { label: 'Redes de Computadores', slug: 'redes' }
-    ],
-    'exatas': [
-      { label: 'Cálculo Diferencial', slug: 'calculo' }
-    ],
-    'humanidades': [
-      { label: 'Humanidades e Lusofonia', slug: 'humanidades' }
-    ]
-  };
+  var mapa = <?php echo wp_json_encode( $mapa_sub_dinamico, JSON_UNESCAPED_UNICODE ); ?>;
+  var subSelecionada = <?php echo wp_json_encode( $filtro_sub ); ?>;
 
-  var selCat  = document.getElementById('select-categoria');
-  var selSub  = document.getElementById('select-subcategoria');
-  var boxDisc = document.getElementById('filtro-disciplinas-multi');
+  var selCat   = document.getElementById('select-categoria');
+  var grupoSub = document.getElementById('grupo-subcategoria');
+  var selSub   = document.getElementById('select-subcategoria');
+  var boxDisc  = document.getElementById('filtro-disciplinas-multi');
 
-  if ( selCat && selSub ) {
+  if ( selCat && selSub && grupoSub ) {
     function popularSubcategorias(cat) {
       selSub.innerHTML = '<option value="">Todas as subcategorias</option>';
-      if ( mapa[cat] ) {
+      if ( cat && mapa[cat] && mapa[cat].length > 0 ) {
+        grupoSub.style.display = 'block';
         mapa[cat].forEach(function(item) {
           var opt = document.createElement('option');
           opt.value = item.slug;
           opt.textContent = item.label;
+          if ( subSelecionada && subSelecionada === item.slug ) {
+            opt.selected = true;
+          }
           selSub.appendChild(opt);
         });
+      } else {
+        grupoSub.style.display = 'none';
       }
     }
 
-    if ( selCat.value ) {
-      popularSubcategorias(selCat.value);
-    }
+    popularSubcategorias(selCat.value);
 
     selCat.addEventListener('change', function() {
+      subSelecionada = '';
       popularSubcategorias(this.value);
     });
 

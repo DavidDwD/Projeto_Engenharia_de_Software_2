@@ -407,6 +407,76 @@ def main():
         )
         print_sub("Administrador loga e é redirecionado para a Central de Moderação (RF44)", resp_login_adm.status_code == 200 and "central-de-moderacao" in resp_login_adm.url)
         print_sub("Central Sentinel lista a denúncia com a questão correta (RF44/RF45)", f"#Q-{id_q2}" in resp_login_adm.text and "Gabarito errado" in resp_login_adm.text)
+        print_sub("Central de Moderação não exibe checkboxes sem funcionalidade", 'type="checkbox"' not in resp_login_adm.text)
+        print_sub("Central de Moderação não lista denúncias órfãs ('Questão indisponível')", "Questão indisponível" not in resp_login_adm.text)
+
+        # -------------------------------------------------------------
+        # 13. Barra Preta WP oculta para Estudante e visível para Admin
+        # -------------------------------------------------------------
+        print_step("13. Barra Preta do WP (oculta para estudantes, visível para admin)")
+        resp_home_est = sessao_autor.get(f"{BASE_URL}/")
+        print_sub("Estudante não vê #wpadminbar no frontend", 'id="wpadminbar"' not in resp_home_est.text)
+        resp_home_adm = sessao_admin.get(f"{BASE_URL}/")
+        print_sub("Administrador mantém #wpadminbar ativo no frontend", 'id="wpadminbar"' in resp_home_adm.text)
+
+        # -------------------------------------------------------------
+        # 14. RF16: AJAX Autocomplete (2+ chars, máx 10) e Limite de 10 Tags
+        # -------------------------------------------------------------
+        print_step("14. RF16: Sugestões AJAX de Tags e Limite Máximo de 10 Tags")
+        r_1char = sessao_autor.get(f"{BASE_URL}/wp-admin/admin-ajax.php?action=unilab_sugerir_tags&termo=B")
+        j_1char = r_1char.json()
+        print_sub("AJAX com 1 caractere retorna lista vazia (RF16)", j_1char.get("success") is True and len(j_1char.get("data", {}).get("tags", [])) == 0)
+
+        r_2char = sessao_autor.get(f"{BASE_URL}/wp-admin/admin-ajax.php?action=unilab_sugerir_tags&termo=Co")
+        j_2char = r_2char.json()
+        tags_sug = j_2char.get("data", {}).get("tags", [])
+        print_sub("AJAX com 2+ caracteres retorna no máximo 10 sugestões", j_2char.get("success") is True and len(tags_sug) <= 10)
+
+        dados_11tags = dict(dados_2alt)
+        dados_11tags["assunto"] = "Teste Limite 11 Tags"
+        dados_11tags["tags_livres"] = ", ".join([f"tag{i}" for i in range(1, 12)])
+        resp_11tags = sessao_autor.post(f"{BASE_URL}/cadastrar-questao/", data=dados_11tags, allow_redirects=True)
+        print_sub("Backend bloqueia publicação com 11 tags (máximo 10)", "máximo 10 tags" in resp_11tags.text)
+
+        # -------------------------------------------------------------
+        # 15. RF31 Ordenação por Curtidas & RN02 Regra de Autoria
+        # -------------------------------------------------------------
+        print_step("15. RF31 Ordenação por Curtidas e RN02 Autoria Estrita")
+        resp_ord = sessao_autor.get(f"{BASE_URL}/?ordenar=curtidas")
+        soup_ord = BeautifulSoup(resp_ord.text, "html.parser")
+        like_nums = []
+        for cnt_el in soup_ord.find_all("div", class_="figma-like-counter"):
+            sp = cnt_el.find("span")
+            if sp and sp.text.strip().isdigit():
+                like_nums.append(int(sp.text.strip()))
+        ordenacao_ok = len(like_nums) > 0 and all(like_nums[i] >= like_nums[i+1] for i in range(len(like_nums) - 1))
+        print_sub(f"Cards em ?ordenar=curtidas estão em ordem decrescente estrita: {like_nums}", ordenacao_ok)
+
+        resp_adm_q2 = sessao_admin.get(url_q2)
+        print_sub("Admin visualizando questão de outro usuário NÃO vê 'VOCÊ É O AUTOR' (RN02)", "VOCÊ É O AUTOR" not in resp_adm_q2.text)
+
+        resp_adm_home = sessao_admin.get(f"{BASE_URL}/")
+        soup_adm_h = BeautifulSoup(resp_adm_home.text, "html.parser")
+        cards_q2 = [c for c in soup_adm_h.find_all("article", class_="figma-card") if "Conceitos de Teste Unitário" in c.text]
+        sem_editar_alheia = len(cards_q2) > 0 and "Editar minha questão" not in cards_q2[0].text
+        print_sub("Admin na Home NÃO vê 'Editar minha questão' em questão de outro aluno (RN02)", sem_editar_alheia)
+
+        # -------------------------------------------------------------
+        # 16. Persistência Real de Rejeição na Moderação (RF45 / RN07)
+        # -------------------------------------------------------------
+        print_step("16. Persistência Real de Rejeição na Moderação (RF45 / RN07)")
+        nonce_mod_m = re.search(r'MOD_NONCE\s*=\s*"([^"]+)"', resp_login_adm.text)
+        dn_match = re.search(r'data-rej="(\d+)"', resp_login_adm.text)
+        if nonce_mod_m and dn_match:
+            dn_id = dn_match.group(1)
+            r_rej = sessao_admin.post(
+                f"{BASE_URL}/wp-admin/admin-ajax.php",
+                data={"action": "unilab_moderar_denuncia", "nonce": nonce_mod_m.group(1), "denuncia_id": dn_id, "acao_moderacao": "rejeitar_denuncia"}
+            )
+            j_rej = r_rej.json()
+            print_sub("AJAX de rejeição de denúncia retornou sucesso (RF45)", j_rej.get("success") is True)
+            resp_pos_rej = sessao_admin.get(f"{BASE_URL}/central-de-moderacao/")
+            print_sub("Denúncia rejeitada saiu da fila pendente após reload", f"#DN-{dn_id}" not in resp_pos_rej.text or "Denúncia Rejeitada" in resp_pos_rej.text)
 
     # Limpeza final: exclui a questão de teste 2
     if id_q2 > 0 and url_q2:

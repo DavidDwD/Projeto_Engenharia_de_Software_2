@@ -64,14 +64,21 @@ function unilab_auto_login_preview_user() {
     }
 }
 
-// Garante a exibição da barra de administração do WordPress no frontend para usuários logados
+// Garante a exibição da barra de administração do WordPress apenas para administradores
 add_filter( 'show_admin_bar', 'unilab_exibir_admin_bar_usuarios_logados', 999 );
 function unilab_exibir_admin_bar_usuarios_logados( $show ) {
-    if ( is_user_logged_in() ) {
+    if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
         return true;
     }
     return false;
 }
+
+// Garante ausência de margem residual no topo quando a barra preta está oculta
+add_action( 'wp_head', function() {
+    if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+        echo '<style id="unilab-no-admin-bar-space">html, body { margin-top: 0 !important; padding-top: 0 !important; }</style>';
+    }
+}, 1000 );
 
 // ==============================================================================
 // 1.0. COMPONENTES VISUAIS COMPARTILHADOS — FIGMA PIXEL PERFECT
@@ -1003,6 +1010,58 @@ function unilab_ajax_moderar_denuncia() {
     wp_send_json_error( array( 'mensagem' => 'Ação de moderação desconhecida.' ), 400 );
 }
 
+// 7.4 Arquiva automaticamente denúncias órfãs caso uma questão seja movida à lixeira/excluída via wp-admin (RF36 / HU27)
+add_action( 'wp_trash_post', 'unilab_hook_limpar_questao_removida' );
+add_action( 'before_delete_post', 'unilab_hook_limpar_questao_removida' );
+function unilab_hook_limpar_questao_removida( $post_id ) {
+    if ( get_post_type( $post_id ) === 'questao' ) {
+        unilab_limpar_referencias_questao( $post_id, 'questao_excluida_admin' );
+    }
+}
+
+// 7.5 Endpoint AJAX de sugestão de tags a partir de 2 caracteres, máximo 10 sugestões (RF16 / HU11)
+add_action( 'wp_ajax_unilab_sugerir_tags', 'unilab_ajax_sugerir_tags' );
+function unilab_ajax_sugerir_tags() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'mensagem' => 'Login necessário.' ), 401 );
+    }
+
+    $termo   = isset( $_REQUEST['termo'] ) ? trim( sanitize_text_field( $_REQUEST['termo'] ) ) : '';
+    $excluir = isset( $_REQUEST['excluir'] ) ? sanitize_text_field( $_REQUEST['excluir'] ) : '';
+
+    if ( mb_strlen( $termo ) < 2 ) {
+        wp_send_json_success( array( 'tags' => array() ) );
+    }
+
+    $tags_excluidas = array_filter( array_map( function( $item ) {
+        return mb_strtolower( trim( $item ) );
+    }, explode( ',', $excluir ) ) );
+
+    $termos_encontrados = get_terms( array(
+        'taxonomy'   => 'tag_questao',
+        'hide_empty' => false,
+        'search'     => $termo,
+        'number'     => 30,
+        'orderby'    => 'count',
+        'order'      => 'DESC',
+    ) );
+
+    $sugestoes = array();
+    if ( ! empty( $termos_encontrados ) && ! is_wp_error( $termos_encontrados ) ) {
+        foreach ( $termos_encontrados as $t ) {
+            if ( in_array( mb_strtolower( $t->name ), $tags_excluidas, true ) ) {
+                continue;
+            }
+            $sugestoes[] = $t->name;
+            if ( count( $sugestoes ) >= 10 ) {
+                break;
+            }
+        }
+    }
+
+    wp_send_json_success( array( 'tags' => $sugestoes ) );
+}
+
 // Admin → Moderação | Aluno → Home
 add_filter( 'login_redirect', function( $redirect_to, $request, $user ) {
     if ( isset( $user->roles ) && is_array( $user->roles ) ) {
@@ -1073,4 +1132,29 @@ function unilab_garantir_configuracoes_apresentacao() {
     }
 
     update_option( 'unilab_bootstrap_v2_done', 1 );
+}
+
+// 8.1 Limpeza única de denúncias órfãs antigas (questões já excluídas anteriormente)
+add_action( 'init', 'unilab_limpar_denuncias_orfas_uma_vez', 20 );
+function unilab_limpar_denuncias_orfas_uma_vez() {
+    if ( get_option( 'unilab_orphan_reports_cleaned_v1' ) ) {
+        return;
+    }
+    $pendentes = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'fields'         => 'ids',
+    ) );
+    foreach ( $pendentes as $did ) {
+        $qid = intval( get_post_meta( $did, 'id_questao', true ) );
+        $q   = $qid > 0 ? get_post( $qid ) : null;
+        if ( ! $q || $q->post_type !== 'questao' || $q->post_status !== 'publish' ) {
+            update_post_meta( $did, '_status_moderacao', 'questao_excluida_admin' );
+            update_post_meta( $did, '_moderador_nome', 'Limpeza Automática' );
+            update_post_meta( $did, '_data_decisao', current_time( 'mysql' ) );
+            wp_update_post( array( 'ID' => $did, 'post_status' => 'private' ) );
+        }
+    }
+    update_option( 'unilab_orphan_reports_cleaned_v1', 1 );
 }
