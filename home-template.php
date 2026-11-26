@@ -839,6 +839,9 @@ $total_questoes = $query_feed->found_posts;
       <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo (! $filtro_favoritos && ! $filtro_minhas) ? 'active' : ''; ?>">Início</a></li>
       <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $filtro_favoritos ? 'active' : ''; ?>">Favoritos</a></li>
       <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>" class="<?php echo $filtro_minhas ? 'active' : ''; ?>">Minhas questões</a></li>
+      <?php if ( $esta_logado ) : ?>
+        <li><a href="<?php echo esc_url( home_url('/perfil/') ); ?>">Meu Perfil</a></li>
+      <?php endif; ?>
     </ul>
     <div class="figma-nav-user">
       <?php if ( current_user_can( 'manage_options' ) ) : ?>
@@ -847,11 +850,21 @@ $total_questoes = $query_feed->found_posts;
           Moderação
         </a>
       <?php endif; ?>
-      <div class="figma-avatar-circle"><?php echo esc_html( $iniciais ); ?></div>
-      <div class="figma-user-meta">
-        <div class="figma-user-name"><?php echo esc_html( $nome_aluno ); ?></div>
-        <div class="figma-user-role"><?php echo $esta_logado ? 'Estudante' : 'Visitante'; ?></div>
-      </div>
+      <?php if ( $esta_logado ) : ?>
+        <a href="<?php echo esc_url( home_url('/perfil/') ); ?>" class="figma-user-profile-link" title="Abrir Meu Perfil" style="display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit;">
+          <div class="figma-avatar-circle"><?php echo esc_html( $iniciais ); ?></div>
+          <div class="figma-user-meta">
+            <div class="figma-user-name"><?php echo esc_html( $nome_aluno ); ?></div>
+            <div class="figma-user-role">Estudante</div>
+          </div>
+        </a>
+      <?php else : ?>
+        <div class="figma-avatar-circle"><?php echo esc_html( $iniciais ); ?></div>
+        <div class="figma-user-meta">
+          <div class="figma-user-name"><?php echo esc_html( $nome_aluno ); ?></div>
+          <div class="figma-user-role">Visitante</div>
+        </div>
+      <?php endif; ?>
       <?php if ( $esta_logado ) : ?>
         <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>

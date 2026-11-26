@@ -478,6 +478,91 @@ def main():
             resp_pos_rej = sessao_admin.get(f"{BASE_URL}/central-de-moderacao/")
             print_sub("Denúncia rejeitada saiu da fila pendente após reload", f"#DN-{dn_id}" not in resp_pos_rej.text or "Denúncia Rejeitada" in resp_pos_rej.text)
 
+    # -------------------------------------------------------------
+    # 17. Perfil, Edição, Troca de Senha e LGPD (RF04, RF06, RF07, RNF08)
+    # -------------------------------------------------------------
+    print_step("17. Perfil, Edição, Troca de Senha e LGPD (RF04, RF06, RF07, RNF08)")
+    import time, json
+    resp_anon_perfil = requests.get(f"{BASE_URL}/perfil/", allow_redirects=False)
+    print_sub("Acesso anônimo a /perfil/ redireciona para login", resp_anon_perfil.status_code in (301, 302) and "log-in" in resp_anon_perfil.headers.get("Location", ""))
+
+    ts_u = int(time.time())
+    email_tmp = f"perfil_tmp_{ts_u}@aluno.unilab.edu.br"
+    sess_tmp = requests.Session()
+    r_reg = sess_tmp.post(f"{BASE_URL}/cadastro/", data={
+        "unilab_registrar_submit": "1",
+        "nome_completo": "Aluno Temporário Perfil",
+        "curso": "Engenharia de Computação",
+        "email": email_tmp,
+        "senha": "SenhaInicial123",
+        "confirma_senha": "SenhaInicial123",
+        "termos": "1",
+    }, allow_redirects=True)
+    print_sub("Cadastro com curso opcional funciona", "bem-vindo" in r_reg.url or r_reg.status_code == 200)
+
+    r_perf = sess_tmp.get(f"{BASE_URL}/perfil/")
+    print_sub("Página /perfil/ exibe nome, e-mail e curso cadastrados (RF06)",
+              "Aluno Temporário Perfil" in r_perf.text and "Engenharia de Computação" in r_perf.text and email_tmp in r_perf.text)
+
+    soup_perf = BeautifulSoup(r_perf.text, "html.parser")
+    perf_nonce = soup_perf.find("input", attrs={"name": "perfil_nonce"})["value"]
+
+    r_edit_p = sess_tmp.post(f"{BASE_URL}/perfil/", data={
+        "perfil_nonce": perf_nonce,
+        "acao_perfil": "editar_perfil",
+        "nome_completo": "Aluno Perfil Atualizado",
+        "curso": "Sistemas de Informação",
+        "email": email_tmp,
+    }, allow_redirects=True)
+    print_sub("Edição de nome e curso persiste no perfil (RF07)",
+              "Aluno Perfil Atualizado" in r_edit_p.text and "Sistemas de Informação" in r_edit_p.text)
+
+    r_pwd_bad = sess_tmp.post(f"{BASE_URL}/perfil/", data={
+        "perfil_nonce": perf_nonce,
+        "acao_perfil": "alterar_senha",
+        "senha_atual": "SenhaErrada999",
+        "nova_senha": "NovaSenha1234",
+        "confirma_nova_senha": "NovaSenha1234",
+    }, allow_redirects=True)
+    print_sub("Alteração de senha recusa senha atual incorreta (RF04)", "incorreta" in r_pwd_bad.text.lower())
+
+    r_pwd_ok = sess_tmp.post(f"{BASE_URL}/perfil/", data={
+        "perfil_nonce": perf_nonce,
+        "acao_perfil": "alterar_senha",
+        "senha_atual": "SenhaInicial123",
+        "nova_senha": "NovaSenha1234",
+        "confirma_nova_senha": "NovaSenha1234",
+    }, allow_redirects=True)
+    print_sub("Alteração de senha com senha atual válida conclui com sucesso (RF04)", "alterada com segurança" in r_pwd_ok.text.lower())
+
+    # Atualiza nonce após renovação de sessão da troca de senha
+    soup_pwd_ok = BeautifulSoup(r_pwd_ok.text, "html.parser")
+    perf_nonce = soup_pwd_ok.find("input", attrs={"name": "perfil_nonce"})["value"]
+
+    r_exp = sess_tmp.post(f"{BASE_URL}/perfil/", data={
+        "perfil_nonce": perf_nonce,
+        "acao_perfil": "exportar_dados",
+    })
+    exp_json = r_exp.json()
+    print_sub("Exportação LGPD retorna JSON completo do usuário (RNF08)",
+              r_exp.status_code == 200 and exp_json.get("usuario", {}).get("curso") == "Sistemas de Informação")
+
+    r_del_u = sess_tmp.post(f"{BASE_URL}/perfil/", data={
+        "perfil_nonce": perf_nonce,
+        "acao_perfil": "excluir_conta",
+        "texto_confirmacao": "EXCLUIR",
+        "senha_confirmacao_exclusao": "NovaSenha1234",
+    }, allow_redirects=True)
+    print_sub("Exclusão da própria conta LGPD redireciona para login confirmado (RNF08)",
+              "conta_excluida=1" in r_del_u.url and "excluídos permanentemente" in r_del_u.text)
+
+    r_relog = requests.post(f"{BASE_URL}/log-in/", data={
+        "unilab_login_submit": "1",
+        "log": email_tmp,
+        "pwd": "NovaSenha1234",
+    }, allow_redirects=True)
+    print_sub("Conta excluída não consegue mais autenticar (RNF08)", "incorretos" in r_relog.text.lower())
+
     # Limpeza final: exclui a questão de teste 2
     if id_q2 > 0 and url_q2:
         form_del2 = soup_view2.find("form", id="form-excluir-questao") or soup_view2.find("input", attrs={"name": "unilab_nonce"})

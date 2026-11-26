@@ -120,6 +120,9 @@ function unilab_render_figma_navbar( $active = 'inicio' ) {
         <li><a href="<?php echo esc_url( home_url('/') ); ?>" class="<?php echo $active === 'inicio' ? 'active' : ''; ?>">Início</a></li>
         <li><a href="<?php echo esc_url( home_url('/?favoritos=1') ); ?>" class="<?php echo $active === 'favoritos' ? 'active' : ''; ?>">Favoritos</a></li>
         <li><a href="<?php echo esc_url( home_url('/?minhas=1') ); ?>" class="<?php echo $active === 'minhas' ? 'active' : ''; ?>">Minhas questões</a></li>
+        <?php if ( is_user_logged_in() ) : ?>
+          <li><a href="<?php echo esc_url( home_url('/perfil/') ); ?>" class="<?php echo $active === 'perfil' ? 'active' : ''; ?>">Meu Perfil</a></li>
+        <?php endif; ?>
       </ul>
       <div class="figma-nav-user">
         <?php if ( current_user_can( 'manage_options' ) ) : ?>
@@ -128,11 +131,21 @@ function unilab_render_figma_navbar( $active = 'inicio' ) {
             Moderação
           </a>
         <?php endif; ?>
-        <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
-        <div class="figma-user-meta">
-          <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
-          <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
-        </div>
+        <?php if ( is_user_logged_in() ) : ?>
+          <a href="<?php echo esc_url( home_url('/perfil/') ); ?>" class="figma-user-profile-link" title="Abrir Meu Perfil" style="display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit;">
+            <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
+            <div class="figma-user-meta">
+              <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
+              <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
+            </div>
+          </a>
+        <?php else : ?>
+          <div class="figma-avatar-circle"><?php echo esc_html( $info['iniciais'] ); ?></div>
+          <div class="figma-user-meta">
+            <div class="figma-user-name"><?php echo esc_html( $info['nome'] ); ?></div>
+            <div class="figma-user-role"><?php echo esc_html( $info['papel'] ); ?></div>
+          </div>
+        <?php endif; ?>
         <?php if ( is_user_logged_in() ) : ?>
           <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="figma-btn-logout" title="Encerrar sessão" style="font-size:11px; font-weight:700; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:4px 10px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-left:8px;">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
@@ -219,6 +232,14 @@ function unilab_forcar_templates_figma( $template ) {
         }
         if ( file_exists( $mod_tpl ) ) {
             return $mod_tpl;
+        }
+    }
+
+    // 8. Perfil e Privacidade LGPD (/perfil/)
+    if ( is_page( 'perfil' ) ) {
+        $perfil_tpl = $dir . '/template-perfil.php';
+        if ( file_exists( $perfil_tpl ) ) {
+            return $perfil_tpl;
         }
     }
 
@@ -1157,4 +1178,28 @@ function unilab_limpar_denuncias_orfas_uma_vez() {
         }
     }
     update_option( 'unilab_orphan_reports_cleaned_v1', 1 );
+}
+
+// 8.2 Garante que a página /perfil/ exista e use template-perfil.php (RF04 / RF06 / RF07 / RNF08)
+add_action( 'init', 'unilab_garantir_pagina_perfil', 15 );
+function unilab_garantir_pagina_perfil() {
+    if ( get_option( 'unilab_page_perfil_v1' ) ) {
+        return;
+    }
+    $pagina_perfil = get_page_by_path( 'perfil' );
+    if ( ! $pagina_perfil ) {
+        $pid = wp_insert_post( array(
+            'post_title'   => 'Meu Perfil',
+            'post_name'    => 'perfil',
+            'post_status'  => 'publish',
+            'post_type'    => 'page',
+            'post_content' => '',
+        ) );
+        if ( $pid && ! is_wp_error( $pid ) ) {
+            update_post_meta( $pid, '_wp_page_template', 'template-perfil.php' );
+        }
+    } else {
+        update_post_meta( $pagina_perfil->ID, '_wp_page_template', 'template-perfil.php' );
+    }
+    update_option( 'unilab_page_perfil_v1', 1 );
 }

@@ -573,6 +573,12 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_login_submit
         <h2 class="figma-form-title">Entrar na sua conta</h2>
         <p class="figma-form-subtitle">Digite seu e-mail institucional ou usuário acadêmico para continuar.</p>
 
+        <?php if ( isset( $_GET['conta_excluida'] ) && $_GET['conta_excluida'] === '1' ) : ?>
+          <div style="background-color:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; padding:12px 16px; border-radius:8px; font-size:13px; font-weight:600; margin-bottom:20px;">
+            Sua conta e seus dados pessoais foram excluídos permanentemente conforme solicitado (LGPD).
+          </div>
+        <?php endif; ?>
+
         <?php if ( ! empty( $erro_login ) ) : ?>
           <div class="figma-login-error">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>

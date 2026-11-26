@@ -16,6 +16,7 @@ $sucesso_registro = false;
 // Processamento seguro do formulário de cadastro
 if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_registrar_submit'] ) ) {
     $nome           = sanitize_text_field( $_POST['nome_completo'] ?? '' );
+    $curso          = sanitize_text_field( $_POST['curso'] ?? '' );
     $email          = sanitize_email( $_POST['email'] ?? '' );
     $senha          = $_POST['senha'] ?? '';
     $confirma_senha = $_POST['confirma_senha'] ?? '';
@@ -56,6 +57,9 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_registrar_su
                 'first_name'   => $nome,
                 'role'         => 'subscriber'
             ) );
+            if ( ! empty( $curso ) ) {
+                update_user_meta( $user_id, 'unilab_curso', $curso );
+            }
 
             // Autentica o aluno automaticamente
             wp_set_current_user( $user_id );
@@ -591,6 +595,11 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['unilab_registrar_su
           <div class="figma-field">
             <label class="figma-label" for="reg_nome">Nome completo *</label>
             <input type="text" id="reg_nome" name="nome_completo" class="figma-input" placeholder="Ana Martins" required autocomplete="name" value="<?php echo isset($_POST['nome_completo']) ? esc_attr($_POST['nome_completo']) : ''; ?>">
+          </div>
+
+          <div class="figma-field">
+            <label class="figma-label" for="reg_curso">Curso (opcional)</label>
+            <input type="text" id="reg_curso" name="curso" class="figma-input" placeholder="Ex.: Engenharia de Computação" value="<?php echo isset($_POST['curso']) ? esc_attr($_POST['curso']) : ''; ?>">
           </div>
 
           <div class="figma-field">

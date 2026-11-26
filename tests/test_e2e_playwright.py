@@ -435,6 +435,62 @@ def main():
         logged_out_ok = "log-in" in page.url
         record("RF05/HU05", "Logoff a partir da Central de Moderação encerra sessão corretamente", logged_out_ok, page.url)
 
+        # 14. Perfil do Estudante & LGPD (/perfil/ — RF04, RF06, RF07, RNF08)
+        import time
+        email_lgpd = f"e2e.perfil.{int(time.time())}@aluno.unilab.edu.br"
+        page.goto(f"{BASE_URL}/cadastro/", wait_until="networkidle")
+        page.fill("#reg_nome", "Aluno Perfil E2E")
+        page.fill("#reg_curso", "Engenharia de Computação")
+        page.fill("#reg_email", email_lgpd)
+        page.fill("#reg_senha", "SenhaTeste123")
+        page.fill("#reg_confirma", "SenhaTeste123")
+        page.check("#reg_termos")
+        with page.expect_navigation(wait_until="networkidle"):
+            page.click("button.btn-register-submit")
+
+        with page.expect_navigation(wait_until="networkidle"):
+            page.click(".figma-nav-links a:has-text('Meu Perfil')")
+        perf_curso_ok = "Engenharia de Computação" in page.locator("#perfil-display-curso").inner_text()
+        page.fill("#perfil_nome", "Aluno Perfil Editado")
+        page.fill("#perfil_curso", "Sistemas de Informação")
+        with page.expect_navigation(wait_until="networkidle"):
+            page.click("#btn-salvar-perfil")
+        edit_perf_ok = "Aluno Perfil Editado" in page.locator("#perfil-display-name").inner_text() and "Sistemas de Informação" in page.locator("#perfil-display-curso").inner_text()
+
+        # Troca de senha (RF04)
+        page.fill("#senha_atual", "SenhaTeste123")
+        page.fill("#nova_senha", "NovaSenhaE2E99")
+        page.fill("#confirma_nova_senha", "NovaSenhaE2E99")
+        with page.expect_navigation(wait_until="networkidle"):
+            page.click("#btn-alterar-senha")
+        pwd_changed_ok = "alterada com segurança" in page.content()
+
+        # Exportação JSON LGPD (RNF08)
+        with page.expect_download() as dl_info:
+            page.click("#btn-exportar-dados")
+        dl = dl_info.value
+        dl_ok = dl.suggested_filename.endswith(".json")
+
+        # Responsividade mobile /perfil/
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_timeout(150)
+        perf_overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+        page.set_viewport_size({"width": 1366, "height": 900})
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_timeout(150)
+        page.screenshot(path=f"{SHOT_DIR}/17_perfil_lgpd.png", full_page=True)
+
+        # Exclusão da conta via modal LGPD (RNF08 / RN06)
+        page.click("#btn-abrir-modal-excluir-conta")
+        page.fill("#texto_confirmacao", "EXCLUIR")
+        page.fill("#senha_confirmacao_exclusao", "NovaSenhaE2E99")
+        with page.expect_navigation(wait_until="networkidle"):
+            page.click("#btn-confirmar-excluir-conta")
+        del_acc_ok = "conta_excluida=1" in page.url
+        record("RF04/RF06/RF07/RNF08", "Perfil visualiza/edita nome+curso, troca senha, exporta JSON LGPD, é responsivo e exclui conta via modal",
+               perf_curso_ok and edit_perf_ok and pwd_changed_ok and dl_ok and (not perf_overflow) and del_acc_ok,
+               f"dl={dl.suggested_filename}, overflow={perf_overflow}, url={page.url}")
+
         browser.close()
 
     with open(REPORT_JSON, "w", encoding="utf-8") as f:
