@@ -36,13 +36,14 @@ $items_reais = array();
 
 foreach ( $posts_denuncias as $d ) {
     $id_questao  = intval( get_post_meta( $d->ID, 'id_questao', true ) );
+    $id_com      = intval( get_post_meta( $d->ID, 'id_comentario', true ) );
+    $tipo_den    = get_post_meta( $d->ID, '_tipo_denuncia', true ) ?: ( $id_com > 0 ? 'comentario' : 'questao' );
     $motivo      = get_post_meta( $d->ID, 'motivo', true ) ?: 'Outro';
     $detalhes    = get_post_meta( $d->ID, 'detalhes', true ) ?: 'Sem detalhes adicionais informados.';
     $aluno_nome  = get_post_meta( $d->ID, 'aluno_denunciante', true ) ?: 'Estudante Anônimo';
     $prioridade  = get_post_meta( $d->ID, 'prioridade', true ) ?: 'Média';
 
-    // Pega o texto, link e autor da questão original
-    $questao_post  = $id_questao > 0 ? get_post( $id_questao ) : null;
+    $questao_post = $id_questao > 0 ? get_post( $id_questao ) : null;
     if ( ! $questao_post || $questao_post->post_type !== 'questao' || $questao_post->post_status !== 'publish' ) {
         // Arquiva automaticamente denúncia órfã de questão já removida (RF36 / RN07 / HU27)
         update_post_meta( $d->ID, '_status_moderacao', 'questao_excluida_admin' );
@@ -51,47 +52,87 @@ foreach ( $posts_denuncias as $d ) {
         wp_update_post( array( 'ID' => $d->ID, 'post_status' => 'private' ) );
         continue;
     }
+
+    if ( $tipo_den === 'comentario' ) {
+        $comment_obj = $id_com > 0 ? get_comment( $id_com ) : null;
+        if ( ! $comment_obj || (string) $comment_obj->comment_approved !== '1' ) {
+            update_post_meta( $d->ID, '_status_moderacao', 'comentario_excluido_admin' );
+            update_post_meta( $d->ID, '_moderador_nome', 'Limpeza Automática' );
+            update_post_meta( $d->ID, '_data_decisao', current_time( 'mysql' ) );
+            wp_update_post( array( 'ID' => $d->ID, 'post_status' => 'private' ) );
+            continue;
+        }
+        $items_reais[] = array(
+            'id'            => $d->ID,
+            'tipo'          => 'comentario',
+            'comentario_id' => $id_com,
+            'questao_id'    => $id_questao,
+            'questao_url'   => get_permalink( $id_questao ) . '#comentario-' . $id_com,
+            'pri'           => $prioridade,
+            'ago'           => max( 0, round( ( time() - strtotime( $d->post_date_gmt ?: $d->post_date ) ) / 60 ) ),
+            'type'          => 'Comentário',
+            'name'          => $comment_obj->comment_author ?: 'Estudante',
+            'h'             => '#C-' . $id_com,
+            'text'          => wp_trim_words( $comment_obj->comment_content, 20, '...' ),
+            'mot'           => $motivo,
+            'why'           => $detalhes,
+            'reporter'      => $aluno_nome,
+            'n'             => 1,
+            'sub'           => 'Comentário #' . $id_com . ' · Q #' . $id_questao,
+        );
+        continue;
+    }
+
     $texto_questao = wp_trim_words( $questao_post->post_content ?: $questao_post->post_title, 20, '...' );
     $autor_questao = get_the_author_meta( 'display_name', $questao_post->post_author ) ?: 'Autor';
     $questao_url   = get_permalink( $id_questao );
 
     $items_reais[] = array(
-        'id'          => $d->ID,
-        'questao_id'  => $id_questao,
-        'questao_url' => $questao_url,
-        'pri'         => $prioridade,
-        'ago'         => max( 0, round( ( time() - strtotime( $d->post_date_gmt ?: $d->post_date ) ) / 60 ) ),
-        'type'        => 'Questão',
-        'name'        => $autor_questao,
-        'h'           => '#Q-' . $id_questao,
-        'text'        => $texto_questao,
-        'mot'         => $motivo,
-        'why'         => $detalhes,
-        'reporter'    => $aluno_nome,
-        'n'           => 1,
-        'sub'         => 'Questão #' . $id_questao
+        'id'            => $d->ID,
+        'tipo'          => 'questao',
+        'comentario_id' => 0,
+        'questao_id'    => $id_questao,
+        'questao_url'   => $questao_url,
+        'pri'           => $prioridade,
+        'ago'           => max( 0, round( ( time() - strtotime( $d->post_date_gmt ?: $d->post_date ) ) / 60 ) ),
+        'type'          => 'Questão',
+        'name'          => $autor_questao,
+        'h'             => '#Q-' . $id_questao,
+        'text'          => $texto_questao,
+        'mot'           => $motivo,
+        'why'           => $detalhes,
+        'reporter'      => $aluno_nome,
+        'n'             => 1,
+        'sub'           => 'Questão #' . $id_questao
     );
 }
 
 $historico_reais = array();
 foreach ( $posts_historico as $h ) {
-    $id_questao  = intval( get_post_meta( $h->ID, 'id_questao', true ) );
-    $motivo      = get_post_meta( $h->ID, 'motivo', true ) ?: 'Outro';
-    $status_mod  = get_post_meta( $h->ID, '_status_moderacao', true ) ?: 'arquivada';
-    $mod_nome    = get_post_meta( $h->ID, '_moderador_nome', true ) ?: 'Administrador';
-    $data_dec    = get_post_meta( $h->ID, '_data_decisao', true ) ?: $h->post_modified;
-    $snap_tit    = get_post_meta( $h->ID, '_questao_titulo_snapshot', true );
+    $id_questao   = intval( get_post_meta( $h->ID, 'id_questao', true ) );
+    $id_com       = intval( get_post_meta( $h->ID, 'id_comentario', true ) );
+    $tipo_den     = get_post_meta( $h->ID, '_tipo_denuncia', true ) ?: ( $id_com > 0 ? 'comentario' : 'questao' );
+    $motivo       = get_post_meta( $h->ID, 'motivo', true ) ?: 'Outro';
+    $status_mod   = get_post_meta( $h->ID, '_status_moderacao', true ) ?: 'arquivada';
+    $mod_nome     = get_post_meta( $h->ID, '_moderador_nome', true ) ?: 'Administrador';
+    $data_dec     = get_post_meta( $h->ID, '_data_decisao', true ) ?: $h->post_modified;
+    $snap_tit     = get_post_meta( $h->ID, '_questao_titulo_snapshot', true );
+    $snap_com     = get_post_meta( $h->ID, '_comentario_texto_snapshot', true );
     $questao_post = $id_questao > 0 ? get_post( $id_questao ) : null;
-    $titulo_q    = $questao_post ? $questao_post->post_title : ( $snap_tit ?: ('Questão #' . $id_questao) );
+    $titulo_q     = $tipo_den === 'comentario'
+        ? ( '[Comentário #' . $id_com . '] ' . ( $snap_com ?: 'Comentário removido' ) )
+        : ( $questao_post ? $questao_post->post_title : ( $snap_tit ?: ('Questão #' . $id_questao) ) );
 
     $historico_reais[] = array(
-        'id'         => $h->ID,
-        'questao_id' => $id_questao,
-        'titulo'     => $titulo_q,
-        'mot'        => $motivo,
-        'status'     => $status_mod,
-        'moderador'  => $mod_nome,
-        'data'       => $data_dec,
+        'id'            => $h->ID,
+        'tipo'          => $tipo_den,
+        'comentario_id' => $id_com,
+        'questao_id'    => $id_questao,
+        'titulo'        => $titulo_q,
+        'mot'           => $motivo,
+        'status'        => $status_mod,
+        'moderador'     => $mod_nome,
+        'data'          => $data_dec,
     );
 }
 
@@ -312,9 +353,9 @@ td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
 <div class="ov" id="ov1" role="dialog" aria-modal="true">
   <div class="modal m1">
     <div class="mh"><div class="mi r"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></div>
-      <div><h3>Confirmar exclusão da questão?</h3><p id="d1">Esta ação acolherá a denúncia, excluirá permanentemente a questão denunciada do banco de questões e arquivará as denúncias pendentes vinculadas a ela.</p></div></div>
+      <div><h3 id="modalDelTitle">Confirmar exclusão da questão?</h3><p id="d1">Esta ação acolherá a denúncia, excluirá permanentemente a questão denunciada do banco de questões e arquivará as denúncias pendentes vinculadas a ela.</p></div></div>
     <button class="x" data-close aria-label="Fechar">✕</button>
-    <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn red" id="confirmDel">Sim, Excluir Questão</button></div>
+    <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn red" id="confirmDel">Sim, Excluir</button></div>
   </div>
 </div>
 
@@ -331,25 +372,31 @@ const $ = s => document.querySelector(s), P = {Alta:0, Média:1, Baixa:2};
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = m => m < 60 ? `há ${m} min` : `há ${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")} min`;
 let pending = null;
+let pendingType = "questao";
 
 REASONS.forEach(r => $("#fm").insertAdjacentHTML("beforeend", `<option>${r}</option>`));
 
 function view(){
   const q = $("#q").value.toLowerCase(), fp = $("#fp").value, fm = $("#fm").value;
-  let l = items.filter(i => (!fp || i.pri === fp) && (!fm || i.mot === fm) && [i.text, i.name, i.mot, i.why, i.reporter, "dn-"+i.id].join(" ").toLowerCase().includes(q));
+  let l = items.filter(i => (!fp || i.pri === fp) && (!fm || i.mot === fm) && [i.text, i.name, i.mot, i.why, i.reporter, i.type, "dn-"+i.id].join(" ").toLowerCase().includes(q));
 
   const o = $("#so").value;
   l.sort(o === "pri" ? (a,b) => P[a.pri] - P[b.pri] || a.ago - b.ago : (a,b) => a.ago - b.ago);
 
-  $("#tb").innerHTML = l.map(i => `<tr class="row" data-id="${i.id}">
-   <td><div class="id">#DN-${i.id}</div><span class="pr ${esc(i.pri)}">${esc(i.pri)}</span><div class="tm">${fmt(i.ago)}</div></td>
-   <td><div class="post"><div class="who"><span class="tag">Questão</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q><a class="ctx" href="${esc(i.questao_url)}" target="_blank" rel="noopener noreferrer">Ver questão denunciada ↗</a></div></td>
-   <td><span class="mot">${esc(i.mot)}</span><div class="just">${esc(i.why)}<div style="margin-top:4px;font-size:11px;color:#475569;">Denunciado por: <strong>${esc(i.reporter)}</strong></div></div></td>
-   <td class="sig"><b>🚩 ${i.n} sinalização</b><small>${esc(i.sub)}</small></td>
-   <td><div class="qa">
-     <button type="button" class="btn red" data-del="${i.id}">Excluir Questão</button>
-     <button type="button" class="btn" data-rej="${i.id}">Ignorar / Rejeitar</button>
-   </div></td></tr>`).join("");
+  $("#tb").innerHTML = l.map(i => {
+    const isCom = i.tipo === "comentario";
+    const linkLbl = isCom ? "Ver comentário na questão ↗" : "Ver questão denunciada ↗";
+    const btnLbl = isCom ? "Excluir Comentário" : "Excluir Questão";
+    return `<tr class="row" data-id="${i.id}">
+     <td><div class="id">#DN-${i.id}</div><span class="pr ${esc(i.pri)}">${esc(i.pri)}</span><div class="tm">${fmt(i.ago)}</div></td>
+     <td><div class="post"><div class="who"><span class="tag">${esc(i.type)}</span><b>${esc(i.name)}</b><span>${esc(i.h)}</span></div><q>${esc(i.text)}</q><a class="ctx" href="${esc(i.questao_url)}" target="_blank" rel="noopener noreferrer">${linkLbl}</a></div></td>
+     <td><span class="mot">${esc(i.mot)}</span><div class="just">${esc(i.why)}<div style="margin-top:4px;font-size:11px;color:#475569;">Denunciado por: <strong>${esc(i.reporter)}</strong></div></div></td>
+     <td class="sig"><b>🚩 ${i.n} sinalização</b><small>${esc(i.sub)}</small></td>
+     <td><div class="qa">
+       <button type="button" class="btn red" data-del="${i.id}" data-del-type="${isCom ? "comentario" : "questao"}">${btnLbl}</button>
+       <button type="button" class="btn" data-rej="${i.id}">Ignorar / Rejeitar</button>
+     </div></td></tr>`;
+  }).join("");
 
   $("#empty").hidden = l.length > 0;
   $("#cnt").textContent = $("#navN").textContent = items.length;
@@ -358,8 +405,9 @@ function view(){
 
 function viewHistorico(){
   $("#tbHist").innerHTML = historico.map(h => {
-    const labelStatus = h.status === "acolhida" ? "Denúncia Acolhida (Questão Excluída)"
-                      : h.status === "rejeitada" ? "Denúncia Rejeitada (Questão Mantida)"
+    const isCom = h.tipo === "comentario";
+    const labelStatus = h.status === "acolhida" ? (isCom ? "Denúncia Acolhida (Comentário Excluído)" : "Denúncia Acolhida (Questão Excluída)")
+                      : h.status === "rejeitada" ? (isCom ? "Denúncia Rejeitada (Comentário Mantido)" : "Denúncia Rejeitada (Questão Mantida)")
                       : h.status === "questao_excluida_autor" ? "Arquivada (Autor Excluiu)"
                       : esc(h.status);
     const pillStyle = h.status === "acolhida" ? "background:var(--red-bg);color:var(--red);"
@@ -367,7 +415,7 @@ function viewHistorico(){
                     : "background:var(--bg);color:var(--muted);";
     return `<tr>
       <td><div class="id">#DN-${h.id}</div></td>
-      <td><strong>${esc(h.titulo)}</strong> <span class="id">(#Q-${h.questao_id})</span></td>
+      <td><strong>${esc(h.titulo)}</strong> <span class="id">(${isCom ? "#C-" + h.comentario_id : "#Q-" + h.questao_id})</span></td>
       <td><span class="mot">${esc(h.mot)}</span></td>
       <td><span style="display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;${pillStyle}">${labelStatus}</span></td>
       <td>${esc(h.moderador)}</td>
@@ -418,6 +466,16 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if(!t) return;
   if(t.dataset.del){
     pending = +t.dataset.del;
+    pendingType = t.dataset.delType || "questao";
+    if(pendingType === "comentario"){
+      $("#modalDelTitle").textContent = "Confirmar exclusão do comentário?";
+      $("#d1").textContent = "Esta ação acolherá a denúncia, excluirá permanentemente o comentário denunciado e arquivará as denúncias pendentes vinculadas a ele (a questão será preservada).";
+      $("#confirmDel").textContent = "Sim, Excluir Comentário";
+    } else {
+      $("#modalDelTitle").textContent = "Confirmar exclusão da questão?";
+      $("#d1").textContent = "Esta ação acolherá a denúncia, excluirá permanentemente a questão denunciada do banco de questões e arquivará as denúncias pendentes vinculadas a ela.";
+      $("#confirmDel").textContent = "Sim, Excluir Questão";
+    }
     $("#ov1").classList.add("open");
   } else if(t.dataset.rej){
     const id = +t.dataset.rej;
@@ -428,7 +486,7 @@ document.addEventListener("click", async e => {
       items = items.filter(x => x.id !== id);
       if(alvo){
         historico.unshift({
-          id: alvo.id, questao_id: alvo.questao_id, titulo: alvo.text,
+          id: alvo.id, tipo: alvo.tipo, comentario_id: alvo.comentario_id, questao_id: alvo.questao_id, titulo: alvo.text,
           mot: alvo.mot, status: "rejeitada", moderador: res.moderador, data: res.data
         });
       }
@@ -445,14 +503,19 @@ document.addEventListener("click", async e => {
     if(!pending) return;
     t.disabled = true;
     try {
-      const res = await executarModeracao(pending, "excluir_questao");
-      const alvo = items.find(x => x.id === pending);
+      const acaoEnv = pendingType === "comentario" ? "excluir_comentario" : "excluir_questao";
+      const res = await executarModeracao(pending, acaoEnv);
       const qid = res.questao_id;
-      const removidas = items.filter(x => x.id === pending || (qid > 0 && x.questao_id === qid));
-      items = items.filter(x => x.id !== pending && !(qid > 0 && x.questao_id === qid));
+      const cid = res.comentario_id || 0;
+      const removidas = items.filter(x => {
+        if (x.id === pending) return true;
+        if (pendingType === "comentario") return cid > 0 && x.comentario_id === cid;
+        return qid > 0 && x.questao_id === qid;
+      });
+      items = items.filter(x => !removidas.includes(x));
       removidas.forEach(r => {
         historico.unshift({
-          id: r.id, questao_id: r.questao_id, titulo: r.text,
+          id: r.id, tipo: r.tipo, comentario_id: r.comentario_id, questao_id: r.questao_id, titulo: r.text,
           mot: r.mot, status: "acolhida", moderador: res.moderador, data: res.data
         });
       });

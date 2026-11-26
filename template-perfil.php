@@ -65,8 +65,8 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['acao_perfil'] ) ) {
                 );
             }
 
-            $favoritos = get_user_meta( $user_id, 'unilab_favoritos', true );
-            $curtidas  = get_user_meta( $user_id, 'unilab_curtidas', true );
+            $favoritos = get_user_meta( $user_id, '_unilab_favoritos', true );
+            $curtidas  = get_user_meta( $user_id, '_unilab_curtidas_usuario', true );
 
             $payload = array(
                 'exportado_em' => current_time( 'c' ),
@@ -205,7 +205,7 @@ if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['acao_perfil'] ) ) {
 
 $curso_atual    = get_user_meta( $user_id, 'unilab_curso', true ) ?: '';
 $data_cadastro  = $usuario_atual->user_registered ? wp_date( 'd/m/Y H:i', strtotime( $usuario_atual->user_registered ) ) : '-';
-$favoritos_raw  = get_user_meta( $user_id, 'unilab_favoritos', true );
+$favoritos_raw  = get_user_meta( $user_id, '_unilab_favoritos', true );
 $total_favs     = is_array( $favoritos_raw ) ? count( $favoritos_raw ) : 0;
 $total_questoes = intval( count_user_posts( $user_id, 'questao', true ) );
 $total_coments  = intval( get_comments( array( 'user_id' => $user_id, 'count' => true, 'status' => 'approve' ) ) );

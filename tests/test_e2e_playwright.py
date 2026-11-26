@@ -347,11 +347,54 @@ def main():
         page.evaluate("window.scrollTo(0, 0)")
         page.screenshot(path=f"{SHOT_DIR}/10_questao_editada.png", full_page=True)
 
-        # 11. Logoff Estudante1 -> Login Estudante2 -> Denúncia + Bloqueio Duplicata (RF05 / RN02 / RF42)
+        # 10b. Comentários do autor (RF37 publicar, RF39 editar, RF38 responder)
+        page.fill("#novo-comentario-texto", "Comentário inicial E2E sobre Singleton.")
+        page.click("#btn-enviar-comentario")
+        page.wait_for_selector(".comentario-item:has-text('Comentário inicial E2E')")
+        com_id_e2e = page.locator(".comentario-item:has-text('Comentário inicial E2E')").first.get_attribute("data-comment-id")
+
+        page.click(f"#comentario-{com_id_e2e} .btn-editar-comentario")
+        page.fill(f"#input-editar-{com_id_e2e}", "Comentário editado E2E sobre Singleton.")
+        page.click(f"#comentario-{com_id_e2e} .btn-salvar-edicao-comentario")
+        page.wait_for_timeout(400)
+        page.reload(wait_until="networkidle")
+        com_ed_persist = "Comentário editado E2E sobre Singleton." in page.locator("#lista-comentarios").inner_text()
+        record("RF37/RF39/HU28/HU30", "Autor publica e edita comentário com persistência no banco", com_ed_persist, f"cid={com_id_e2e}")
+
+        # 11. Logoff Estudante1 -> Login Estudante2 -> Responder/Excluir/Denunciar Comentário + Denúncia Questão
         logout_via_ui(page)
         login_via_ui(page, "estudante2", "senha123")
         page.goto(url_questao, wait_until="networkidle")
         no_toolbar = page.locator(".toolbar-autor").count() == 0
+        sem_edit_com_alheio = page.locator(f"#comentario-{com_id_e2e} .btn-editar-comentario").count() == 0
+
+        # Responde ao comentário (RF38)
+        page.click(f"#comentario-{com_id_e2e} .btn-responder-comentario")
+        page.fill(f"#input-responder-{com_id_e2e}", "Resposta E2E ao comentário sobre Singleton.")
+        page.click(f"#comentario-{com_id_e2e} .btn-confirmar-resposta")
+        page.wait_for_selector(".comentario-resposta:has-text('Resposta E2E')")
+
+        # Publica e exclui próprio comentário via modal RN06 (RF40)
+        page.fill("#novo-comentario-texto", "Comentário efêmero E2E para exclusão.")
+        page.click("#btn-enviar-comentario")
+        page.wait_for_selector(".comentario-item:has-text('Comentário efêmero E2E')")
+        cid_efemero = page.locator(".comentario-item:has-text('Comentário efêmero E2E')").first.get_attribute("data-comment-id")
+        page.click(f"#comentario-{cid_efemero} .btn-excluir-comentario")
+        page.click("#btn-confirmar-excluir-com")
+        page.wait_for_timeout(400)
+        com_excluido_ok = page.locator(f"#comentario-{cid_efemero}").count() == 0
+
+        # Denuncia comentário para moderação (RF43)
+        page.click(f"#comentario-{com_id_e2e} .btn-denunciar-comentario")
+        page.select_option("#denuncia-comentario-motivo", "Conteúdo ofensivo")
+        page.fill("#denuncia-comentario-detalhes", "Denúncia E2E de comentário.")
+        page.click("#btn-enviar-denuncia-com")
+        page.wait_for_timeout(400)
+        den_com_ok = "Denúncia de comentário enviada" in page.locator("#comentario-feedback-msg").inner_text()
+        page.screenshot(path=f"{SHOT_DIR}/11b_single_comentarios.png", full_page=True)
+        record("RF38/RF40/RF43/RN02", "Resposta, bloqueio de edição alheia, exclusão com modal e denúncia de comentário funcionam",
+               sem_edit_com_alheio and com_excluido_ok and den_com_ok, f"com_excluido={com_excluido_ok}, den_com={den_com_ok}")
+
         page.click("#btn-abrir-modal-denuncia")
         page.select_option('#modalDenuncia select[name="motivo"]', "Gabarito errado")
         page.fill('#modalDenuncia textarea[name="detalhes"]', "Denúncia E2E #1 para testar rejeição na moderação.")
@@ -362,14 +405,16 @@ def main():
         page.screenshot(path=f"{SHOT_DIR}/11_denuncia_enviada.png", full_page=True)
         logout_via_ui(page)
 
-        # 12. Admin Moderação - Checkboxes removidos, sem órfãs, responsivo mobile, RN02 autoria, Rejeitar com Persistência Real
+        # 12. Admin Moderação - Checkboxes removidos, sem órfãs, responsivo mobile, RN02 autoria, Moderar Comentário e Rejeitar Questão
         login_via_ui(page, "david", "12345")
         in_mod = "central-de-moderacao" in page.url
         has_ver_q = page.locator("a.ctx:has-text('Ver questão denunciada')").count() > 0
         has_sair_mod = page.locator("#btnSairModeracao").is_visible()
         no_checkboxes = page.locator("input[type='checkbox']").count() == 0
         no_orfas = "Questão indisponível" not in page.locator("#tb").inner_text()
-        record("RF44/RF05/HU35", "Moderação sem checkboxes, sem denúncias órfãs, com link da questão e botão Sair", in_mod and has_ver_q and has_sair_mod and no_checkboxes and no_orfas, page.url)
+        has_den_com_row = page.locator('tr.row:has(button[data-del-type="comentario"])').count() > 0
+        record("RF44/RF05/HU35", "Moderação sem checkboxes, sem denúncias órfãs, listando questão/comentário e botão Sair",
+               in_mod and has_ver_q and has_sair_mod and no_checkboxes and no_orfas and has_den_com_row, page.url)
         page.screenshot(path=f"{SHOT_DIR}/12_moderacao_fila_desktop.png", full_page=True)
 
         # Responsividade mobile do painel de moderação (RNF05)
@@ -386,8 +431,22 @@ def main():
         record("RN02/HU25 (Admin)", "Admin vendo questão de outro aluno não vê 'VOCÊ É O AUTOR'", adm_nao_autor)
         page.goto(f"{BASE_URL}/central-de-moderacao/", wait_until="networkidle")
 
-        # Clica em Ignorar / Rejeitar na denúncia mais recente (primeira linha)
-        first_rej = page.locator("button[data-rej]").first
+        # Exclui comentário denunciado na moderação sem remover a questão (RF43/RF45)
+        del_com_btn = page.locator('tr.row button[data-del-type="comentario"]').first
+        den_com_mod_id = del_com_btn.get_attribute("data-del")
+        del_com_btn.click()
+        page.wait_for_timeout(250)
+        modal_com_txt = page.locator("#modalDelTitle").inner_text()
+        page.click("#confirmDel")
+        page.wait_for_timeout(1200)
+        page.reload(wait_until="networkidle")
+        com_mod_gone = page.locator(f'tr.row[data-id="{den_com_mod_id}"]').count() == 0
+        q_pos_com_del = page.request.get(url_questao).status == 200
+        record("RF43/RF45/HU34", "Moderação acolhe denúncia de comentário, exclui comentário e mantém questão publicada",
+               "comentário" in modal_com_txt.lower() and com_mod_gone and q_pos_com_del, f"dn_com={den_com_mod_id}, q_status_200={q_pos_com_del}")
+
+        # Clica em Ignorar / Rejeitar na denúncia da QUESTÃO mais recente
+        first_rej = page.locator('tr.row:has(button[data-del-type="questao"]) button[data-rej]').first
         den_id_rej = first_rej.get_attribute("data-rej")
         first_rej.click()
         page.wait_for_timeout(1200)
@@ -411,7 +470,7 @@ def main():
         logout_via_ui(page)
 
         login_via_ui(page, "david", "12345")
-        first_del = page.locator("button[data-del]").first
+        first_del = page.locator('tr.row button[data-del-type="questao"]').first
         den_id_del = first_del.get_attribute("data-del")
         first_del.click()
         page.wait_for_timeout(300)

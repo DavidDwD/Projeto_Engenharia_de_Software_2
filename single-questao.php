@@ -805,13 +805,169 @@ if ( is_user_logged_in() ) {
       flex-shrink: 0;
     }
 
+    /* COMENTÁRIOS E DISCUSSÃO (RF37-RF40, RF43) */
+    .figma-card-comentarios {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 32px 36px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .comentarios-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .comentarios-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #102D5C;
+      margin: 0;
+    }
+    .comentarios-count-pill {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 99px;
+    }
+    .comentario-form-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .comentario-textarea {
+      width: 100%;
+      min-height: 82px;
+      padding: 12px 14px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #0f172a;
+      background: #ffffff;
+      resize: vertical;
+      outline: none;
+    }
+    .comentario-textarea:focus {
+      border-color: #102D5C;
+      box-shadow: 0 0 0 3px rgba(16, 45, 92, 0.1);
+    }
+    .comentario-btn-primary {
+      background: #102D5C !important;
+      color: #ffffff !important;
+      border: none !important;
+      border-radius: 8px;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .comentario-btn-primary:hover { background: #0b1f40 !important; }
+    .comentario-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      background: #ffffff;
+    }
+    .comentario-item.comentario-resposta {
+      margin-left: 34px;
+      margin-top: 10px;
+      margin-bottom: 0;
+      background: #f8fafc;
+      border-left: 3px solid #93c5fd;
+    }
+    .comentario-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .comentario-autor-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #475569;
+    }
+    .comentario-autor-nome { font-weight: 700; color: #0f172a; }
+    .comentario-editado-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 1px 7px;
+      border-radius: 99px;
+    }
+    .comentario-texto {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1e293b;
+      white-space: pre-line;
+      margin-bottom: 10px;
+    }
+    .comentario-acoes {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .comentario-act-btn {
+      background: #f8fafc !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #334155 !important;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .comentario-act-btn:hover { background: #e2e8f0 !important; }
+    .comentario-act-danger {
+      color: #b91c1c !important;
+      border-color: #fecaca !important;
+      background: #fef2f2 !important;
+    }
+    .comentario-act-warn {
+      color: #b45309 !important;
+      border-color: #fde68a !important;
+      background: #fffbeb !important;
+    }
+    .comentario-inline-box {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      display: none;
+    }
+    .comentario-feedback-msg {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: none;
+    }
+
     /* RESPONSIVIDADE MOBILE FIGMA (Visualização da questão — Mobile.svg) */
     @media (max-width: 860px) {
       .figma-top-bar { padding: 0 16px; font-size: 10px; }
       .figma-navbar { padding: 12px 16px; }
       .figma-nav-links { display: none; }
       .figma-single-container { padding: 20px 16px 40px 16px; }
-      .card-questao, .figma-card-materiais { padding: 24px 16px; border-radius: 10px; }
+      .card-questao, .figma-card-materiais, .figma-card-comentarios { padding: 24px 16px; border-radius: 10px; }
+      .comentario-item.comentario-resposta { margin-left: 16px; }
       .toolbar-autor { flex-direction: column; align-items: stretch; text-align: center; gap: 12px; }
       .toolbar-autor-acoes { flex-direction: column; width: 100%; }
       .btn-autor-editar, .btn-autor-excluir { width: 100%; justify-content: center; }
@@ -1177,6 +1333,194 @@ if ( is_user_logged_in() ) {
         </div>
       <?php endif; ?>
 
+      <!-- ======================================================== -->
+      <!-- CARD 3: COMENTÁRIOS E DISCUSSÃO (RF37–RF40, RF43)        -->
+      <!-- ======================================================== -->
+      <?php
+      $comentarios_todos = get_comments( array(
+          'post_id' => get_the_ID(),
+          'status'  => 'approve',
+          'order'   => 'ASC',
+      ) );
+      $comentarios_raiz = array();
+      $comentarios_filhos = array();
+      foreach ( $comentarios_todos as $c_item ) {
+          $pid_c = intval( $c_item->comment_parent );
+          if ( $pid_c > 0 ) {
+              $comentarios_filhos[ $pid_c ][] = $c_item;
+          } else {
+              $comentarios_raiz[] = $c_item;
+          }
+      }
+      $comentario_nonce = wp_create_nonce( 'unilab_comentario_action' );
+      ?>
+      <section class="figma-card-comentarios" id="secao-comentarios">
+        <div class="comentarios-header">
+          <h3 class="comentarios-title">Comentários e Discussão</h3>
+          <span class="comentarios-count-pill" id="comentarios-total-badge"><?php echo count( $comentarios_todos ); ?> comentário(s)</span>
+        </div>
+
+        <div class="comentario-feedback-msg" id="comentario-feedback-msg"></div>
+
+        <?php if ( is_user_logged_in() ) : ?>
+          <form class="comentario-form-box" id="form-novo-comentario">
+            <label for="novo-comentario-texto" style="display:block; font-size:13px; font-weight:700; color:#1e293b; margin-bottom:8px;">
+              Deixe um comentário ou dúvida sobre esta questão:
+            </label>
+            <textarea id="novo-comentario-texto" class="comentario-textarea" placeholder="Escreva seu comentário acadêmico (mínimo 2 caracteres)..." required minlength="2" maxlength="2000"></textarea>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+              <button type="submit" class="comentario-btn-primary" id="btn-enviar-comentario">Publicar comentário</button>
+            </div>
+          </form>
+        <?php else : ?>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#475569;">
+            <a href="<?php echo esc_url( home_url('/log-in/') ); ?>" style="color:#102D5C; font-weight:700; text-decoration:underline;">Faça login</a> para comentar, responder ou denunciar comentários nesta questão.
+          </div>
+        <?php endif; ?>
+
+        <div id="lista-comentarios">
+          <?php if ( empty( $comentarios_raiz ) ) : ?>
+            <div id="comentarios-vazio" style="text-align:center; padding:24px; color:#64748b; font-size:14px;">
+              Nenhum comentário publicado ainda. Seja o primeiro a contribuir!
+            </div>
+          <?php else : ?>
+            <?php foreach ( $comentarios_raiz as $c ) :
+                $cid       = intval( $c->comment_ID );
+                $eh_c_aut  = is_user_logged_in() && ( intval( $c->user_id ) === $usuario_atual_id );
+                $c_editado = get_comment_meta( $cid, '_unilab_editado_em', true );
+                $respostas = $comentarios_filhos[ $cid ] ?? array();
+            ?>
+              <article class="comentario-item" id="comentario-<?php echo $cid; ?>" data-comment-id="<?php echo $cid; ?>">
+                <div class="comentario-meta-row">
+                  <div class="comentario-autor-info">
+                    <span class="comentario-autor-nome"><?php echo esc_html( $c->comment_author ?: 'Estudante' ); ?></span>
+                    <span>· <?php echo esc_html( wp_date( 'd/m/Y H:i', strtotime( $c->comment_date ) ) ); ?></span>
+                    <?php if ( ! empty( $c_editado ) ) : ?>
+                      <span class="comentario-editado-badge">Editado em <?php echo esc_html( $c_editado ); ?></span>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                <div class="comentario-texto" id="comentario-texto-<?php echo $cid; ?>"><?php echo esc_html( $c->comment_content ); ?></div>
+
+                <?php if ( is_user_logged_in() ) : ?>
+                  <div class="comentario-acoes">
+                    <button type="button" class="comentario-act-btn btn-responder-comentario" data-cid="<?php echo $cid; ?>">Responder</button>
+                    <?php if ( $eh_c_aut ) : ?>
+                      <button type="button" class="comentario-act-btn btn-editar-comentario" data-cid="<?php echo $cid; ?>">Editar</button>
+                      <button type="button" class="comentario-act-btn comentario-act-danger btn-excluir-comentario" data-cid="<?php echo $cid; ?>">Excluir</button>
+                    <?php endif; ?>
+                    <button type="button" class="comentario-act-btn comentario-act-warn btn-denunciar-comentario" data-cid="<?php echo $cid; ?>">Denunciar</button>
+                  </div>
+
+                  <!-- Form inline Responder (RF38) -->
+                  <div class="comentario-inline-box" id="box-responder-<?php echo $cid; ?>">
+                    <textarea class="comentario-textarea input-responder-texto" id="input-responder-<?php echo $cid; ?>" rows="2" placeholder="Escreva sua resposta..."></textarea>
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                      <button type="button" class="comentario-act-btn btn-fechar-inline" data-target="box-responder-<?php echo $cid; ?>">Cancelar</button>
+                      <button type="button" class="comentario-btn-primary btn-confirmar-resposta" data-parent="<?php echo $cid; ?>">Enviar resposta</button>
+                    </div>
+                  </div>
+
+                  <?php if ( $eh_c_aut ) : ?>
+                    <!-- Form inline Editar (RF39) -->
+                    <div class="comentario-inline-box" id="box-editar-<?php echo $cid; ?>">
+                      <textarea class="comentario-textarea input-editar-texto" id="input-editar-<?php echo $cid; ?>" rows="2"><?php echo esc_textarea( $c->comment_content ); ?></textarea>
+                      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                        <button type="button" class="comentario-act-btn btn-fechar-inline" data-target="box-editar-<?php echo $cid; ?>">Cancelar</button>
+                        <button type="button" class="comentario-btn-primary btn-salvar-edicao-comentario" data-cid="<?php echo $cid; ?>">Salvar edição</button>
+                      </div>
+                    </div>
+                  <?php endif; ?>
+                <?php endif; ?>
+
+                <div class="comentario-respostas-lista" id="respostas-de-<?php echo $cid; ?>">
+                  <?php foreach ( $respostas as $r ) :
+                      $rid       = intval( $r->comment_ID );
+                      $eh_r_aut  = is_user_logged_in() && ( intval( $r->user_id ) === $usuario_atual_id );
+                      $r_editado = get_comment_meta( $rid, '_unilab_editado_em', true );
+                  ?>
+                    <article class="comentario-item comentario-resposta" id="comentario-<?php echo $rid; ?>" data-comment-id="<?php echo $rid; ?>">
+                      <div class="comentario-meta-row">
+                        <div class="comentario-autor-info">
+                          <span class="comentario-autor-nome"><?php echo esc_html( $r->comment_author ?: 'Estudante' ); ?></span>
+                          <span>· <?php echo esc_html( wp_date( 'd/m/Y H:i', strtotime( $r->comment_date ) ) ); ?></span>
+                          <?php if ( ! empty( $r_editado ) ) : ?>
+                            <span class="comentario-editado-badge">Editado em <?php echo esc_html( $r_editado ); ?></span>
+                          <?php endif; ?>
+                        </div>
+                      </div>
+                      <div class="comentario-texto" id="comentario-texto-<?php echo $rid; ?>"><?php echo esc_html( $r->comment_content ); ?></div>
+
+                      <?php if ( is_user_logged_in() ) : ?>
+                        <div class="comentario-acoes">
+                          <?php if ( $eh_r_aut ) : ?>
+                            <button type="button" class="comentario-act-btn btn-editar-comentario" data-cid="<?php echo $rid; ?>">Editar</button>
+                            <button type="button" class="comentario-act-btn comentario-act-danger btn-excluir-comentario" data-cid="<?php echo $rid; ?>">Excluir</button>
+                          <?php endif; ?>
+                          <button type="button" class="comentario-act-btn comentario-act-warn btn-denunciar-comentario" data-cid="<?php echo $rid; ?>">Denunciar</button>
+                        </div>
+
+                        <?php if ( $eh_r_aut ) : ?>
+                          <div class="comentario-inline-box" id="box-editar-<?php echo $rid; ?>">
+                            <textarea class="comentario-textarea input-editar-texto" id="input-editar-<?php echo $rid; ?>" rows="2"><?php echo esc_textarea( $r->comment_content ); ?></textarea>
+                            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                              <button type="button" class="comentario-act-btn btn-fechar-inline" data-target="box-editar-<?php echo $rid; ?>">Cancelar</button>
+                              <button type="button" class="comentario-btn-primary btn-salvar-edicao-comentario" data-cid="<?php echo $rid; ?>">Salvar edição</button>
+                            </div>
+                          </div>
+                        <?php endif; ?>
+                      <?php endif; ?>
+                    </article>
+                  <?php endforeach; ?>
+                </div>
+              </article>
+            <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
+      </section>
+
+      <?php if ( is_user_logged_in() ) : ?>
+        <!-- Modal Confirmar Exclusão de Comentário (RF40 / RN06) -->
+        <div id="modalExcluirComentario" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+          <div style="background:#fff; border-radius:12px; max-width:440px; width:100%; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+            <h3 style="margin:0 0 8px 0; color:#991b1b; font-size:18px; font-weight:800;">Excluir Comentário?</h3>
+            <p style="margin:0 0 18px 0; font-size:13px; color:#475569; line-height:1.5;">Esta ação removerá permanentemente o comentário e eventuais respostas vinculadas.</p>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+              <button type="button" id="btn-cancelar-excluir-com" class="comentario-act-btn" style="padding:8px 16px;">Cancelar</button>
+              <button type="button" id="btn-confirmar-excluir-com" style="background:#dc2626 !important; color:#fff !important; border:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer;">Sim, excluir comentário</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Denunciar Comentário (RF43 / HU34) -->
+        <div id="modalDenunciaComentario" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+          <div style="background:#fff; border-radius:12px; max-width:480px; width:100%; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+            <h3 style="margin:0 0 8px 0; color:#102D5C; font-size:18px; font-weight:800;">Denunciar Comentário</h3>
+            <p style="margin:0 0 16px 0; font-size:13px; color:#64748b;">Sinalize comentários inadequados ou ofensivos para análise da moderação.</p>
+            <form id="form-denunciar-comentario">
+              <input type="hidden" id="denuncia-comentario-id" value="0">
+              <div style="margin-bottom:14px;">
+                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:#334155;">Motivo da denúncia:</label>
+                <select id="denuncia-comentario-motivo" required style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px;">
+                  <option value="Conteúdo ofensivo">Conteúdo ofensivo</option>
+                  <option value="Spam ou Duplicada">Spam ou Duplicada</option>
+                  <option value="Gabarito errado">Informação incorreta</option>
+                  <option value="Informação perigosa">Informação perigosa</option>
+                </select>
+              </div>
+              <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px; color:#334155;">Justificativa:</label>
+                <textarea id="denuncia-comentario-detalhes" rows="3" placeholder="Explique brevemente o motivo..." required style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; font-family:inherit;"></textarea>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" id="btn-cancelar-denuncia-com" class="comentario-act-btn" style="padding:8px 16px;">Cancelar</button>
+                <button type="submit" id="btn-enviar-denuncia-com" style="background:#dc2626 !important; color:#fff !important; border:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer;">Enviar Denúncia</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      <?php endif; ?>
+
       <a href="<?php echo esc_url( home_url('/') ); ?>" class="btn-voltar-resultados">
         ← Voltar para os resultados
       </a>
@@ -1203,6 +1547,201 @@ document.addEventListener('DOMContentLoaded', function() {
           btnTentar.style.display = 'inline-block';
         }
       }, 100);
+    });
+  }
+
+  // Módulo de Comentários via AJAX (RF37, RF38, RF39, RF40, RF43)
+  var COM_AJAX = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+  var COM_NONCE = <?php echo wp_json_encode( $comentario_nonce ); ?>;
+  var Q_ID = <?php echo intval( get_the_ID() ); ?>;
+  var msgEl = document.getElementById('comentario-feedback-msg');
+  var comExcluirPendente = 0;
+
+  function showComMsg(txt, ok) {
+    if (!msgEl) return;
+    msgEl.style.display = 'block';
+    msgEl.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    msgEl.style.border = ok ? '1px solid #bbf7d0' : '1px solid #fecaca';
+    msgEl.style.color = ok ? '#15803d' : '#b91c1c';
+    msgEl.textContent = txt;
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/[&<>"]/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+    });
+  }
+
+  function atualizarContagem(delta) {
+    var badge = document.getElementById('comentarios-total-badge');
+    if (!badge) return;
+    var m = badge.textContent.match(/\d+/);
+    var cur = m ? parseInt(m[0], 10) : 0;
+    var nxt = Math.max(0, cur + delta);
+    badge.textContent = nxt + ' comentário(s)';
+  }
+
+  function criarElementoComentario(c, isResposta) {
+    var art = document.createElement('article');
+    art.className = 'comentario-item' + (isResposta ? ' comentario-resposta' : '');
+    art.id = 'comentario-' + c.id;
+    art.dataset.commentId = String(c.id);
+    art.innerHTML =
+      '<div class="comentario-meta-row"><div class="comentario-autor-info">' +
+      '<span class="comentario-autor-nome">' + escHtml(c.autor) + '</span>' +
+      '<span>· ' + escHtml(c.data) + '</span></div></div>' +
+      '<div class="comentario-texto" id="comentario-texto-' + c.id + '">' + escHtml(c.conteudo) + '</div>' +
+      '<div class="comentario-acoes">' +
+      (isResposta ? '' : '<button type="button" class="comentario-act-btn btn-responder-comentario" data-cid="' + c.id + '">Responder</button>') +
+      '<button type="button" class="comentario-act-btn btn-editar-comentario" data-cid="' + c.id + '">Editar</button>' +
+      '<button type="button" class="comentario-act-btn comentario-act-danger btn-excluir-comentario" data-cid="' + c.id + '">Excluir</button>' +
+      '<button type="button" class="comentario-act-btn comentario-act-warn btn-denunciar-comentario" data-cid="' + c.id + '">Denunciar</button>' +
+      '</div>' +
+      (isResposta ? '' : '<div class="comentario-inline-box" id="box-responder-' + c.id + '"><textarea class="comentario-textarea input-responder-texto" id="input-responder-' + c.id + '" rows="2" placeholder="Escreva sua resposta..."></textarea><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;"><button type="button" class="comentario-act-btn btn-fechar-inline" data-target="box-responder-' + c.id + '">Cancelar</button><button type="button" class="comentario-btn-primary btn-confirmar-resposta" data-parent="' + c.id + '">Enviar resposta</button></div></div>') +
+      '<div class="comentario-inline-box" id="box-editar-' + c.id + '"><textarea class="comentario-textarea input-editar-texto" id="input-editar-' + c.id + '" rows="2">' + escHtml(c.conteudo) + '</textarea><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;"><button type="button" class="comentario-act-btn btn-fechar-inline" data-target="box-editar-' + c.id + '">Cancelar</button><button type="button" class="comentario-btn-primary btn-salvar-edicao-comentario" data-cid="' + c.id + '">Salvar edição</button></div></div>' +
+      (isResposta ? '' : '<div class="comentario-respostas-lista" id="respostas-de-' + c.id + '"></div>');
+    return art;
+  }
+
+  async function postComAjax(params) {
+    var body = new URLSearchParams(Object.assign({ nonce: COM_NONCE }, params));
+    var resp = await fetch(COM_AJAX, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: body.toString()
+    });
+    var json = await resp.json();
+    if (!resp.ok || !json.success) {
+      throw new Error((json && json.data && json.data.mensagem) || 'Erro na operação.');
+    }
+    return json.data;
+  }
+
+  var formNovo = document.getElementById('form-novo-comentario');
+  if (formNovo) {
+    formNovo.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var ta = document.getElementById('novo-comentario-texto');
+      var txt = (ta.value || '').trim();
+      if (txt.length < 2) { showComMsg('Digite ao menos 2 caracteres.', false); return; }
+      try {
+        var res = await postComAjax({ action: 'unilab_publicar_comentario', questao_id: Q_ID, parent_id: 0, conteudo: txt });
+        var emptyEl = document.getElementById('comentarios-vazio');
+        if (emptyEl) emptyEl.remove();
+        document.getElementById('lista-comentarios').appendChild(criarElementoComentario(res.comentario, false));
+        ta.value = '';
+        atualizarContagem(1);
+        showComMsg(res.mensagem, true);
+      } catch (err) {
+        showComMsg(err.message, false);
+      }
+    });
+  }
+
+  var secCom = document.getElementById('secao-comentarios');
+  if (secCom) {
+    secCom.addEventListener('click', async function(e) {
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      var cid = btn.dataset.cid || '';
+
+      if (btn.classList.contains('btn-responder-comentario')) {
+        var bResp = document.getElementById('box-responder-' + cid);
+        if (bResp) bResp.style.display = bResp.style.display === 'block' ? 'none' : 'block';
+      } else if (btn.classList.contains('btn-editar-comentario')) {
+        var bEd = document.getElementById('box-editar-' + cid);
+        if (bEd) bEd.style.display = bEd.style.display === 'block' ? 'none' : 'block';
+      } else if (btn.classList.contains('btn-fechar-inline')) {
+        var target = document.getElementById(btn.dataset.target);
+        if (target) target.style.display = 'none';
+      } else if (btn.classList.contains('btn-confirmar-resposta')) {
+        var pid = btn.dataset.parent;
+        var taR = document.getElementById('input-responder-' + pid);
+        var txtR = (taR ? taR.value : '').trim();
+        try {
+          var resR = await postComAjax({ action: 'unilab_publicar_comentario', questao_id: Q_ID, parent_id: pid, conteudo: txtR });
+          var boxRespostas = document.getElementById('respostas-de-' + resR.comentario.parent_id);
+          if (boxRespostas) boxRespostas.appendChild(criarElementoComentario(resR.comentario, true));
+          taR.value = '';
+          document.getElementById('box-responder-' + pid).style.display = 'none';
+          atualizarContagem(1);
+          showComMsg(resR.mensagem, true);
+        } catch (errR) {
+          showComMsg(errR.message, false);
+        }
+      } else if (btn.classList.contains('btn-salvar-edicao-comentario')) {
+        var taE = document.getElementById('input-editar-' + cid);
+        var txtE = (taE ? taE.value : '').trim();
+        try {
+          var resE = await postComAjax({ action: 'unilab_editar_comentario', comentario_id: cid, conteudo: txtE });
+          var txtEl = document.getElementById('comentario-texto-' + cid);
+          if (txtEl) txtEl.textContent = resE.conteudo;
+          document.getElementById('box-editar-' + cid).style.display = 'none';
+          showComMsg(resE.mensagem, true);
+        } catch (errE) {
+          showComMsg(errE.message, false);
+        }
+      } else if (btn.classList.contains('btn-excluir-comentario')) {
+        comExcluirPendente = parseInt(cid, 10);
+        var mDel = document.getElementById('modalExcluirComentario');
+        if (mDel) mDel.style.display = 'flex';
+      } else if (btn.classList.contains('btn-denunciar-comentario')) {
+        document.getElementById('denuncia-comentario-id').value = cid;
+        document.getElementById('denuncia-comentario-detalhes').value = '';
+        var mDen = document.getElementById('modalDenunciaComentario');
+        if (mDen) mDen.style.display = 'flex';
+      }
+    });
+  }
+
+  var btnCancelExCom = document.getElementById('btn-cancelar-excluir-com');
+  if (btnCancelExCom) {
+    btnCancelExCom.addEventListener('click', function() {
+      document.getElementById('modalExcluirComentario').style.display = 'none';
+      comExcluirPendente = 0;
+    });
+  }
+  var btnConfExCom = document.getElementById('btn-confirmar-excluir-com');
+  if (btnConfExCom) {
+    btnConfExCom.addEventListener('click', async function() {
+      if (!comExcluirPendente) return;
+      try {
+        var resD = await postComAjax({ action: 'unilab_excluir_comentario', comentario_id: comExcluirPendente });
+        var node = document.getElementById('comentario-' + comExcluirPendente);
+        var removidos = 1 + (node ? node.querySelectorAll('.comentario-resposta').length : 0);
+        if (node) node.remove();
+        document.getElementById('modalExcluirComentario').style.display = 'none';
+        comExcluirPendente = 0;
+        atualizarContagem(-removidos);
+        showComMsg(resD.mensagem, true);
+      } catch (errD) {
+        showComMsg(errD.message, false);
+      }
+    });
+  }
+
+  var btnCancelDenCom = document.getElementById('btn-cancelar-denuncia-com');
+  if (btnCancelDenCom) {
+    btnCancelDenCom.addEventListener('click', function() {
+      document.getElementById('modalDenunciaComentario').style.display = 'none';
+    });
+  }
+  var formDenCom = document.getElementById('form-denunciar-comentario');
+  if (formDenCom) {
+    formDenCom.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var cidD = document.getElementById('denuncia-comentario-id').value;
+      var motD = document.getElementById('denuncia-comentario-motivo').value;
+      var detD = document.getElementById('denuncia-comentario-detalhes').value;
+      try {
+        var resDen = await postComAjax({ action: 'unilab_denunciar_comentario', comentario_id: cidD, motivo: motD, detalhes: detD });
+        document.getElementById('modalDenunciaComentario').style.display = 'none';
+        showComMsg(resDen.mensagem, true);
+      } catch (errDen) {
+        document.getElementById('modalDenunciaComentario').style.display = 'none';
+        showComMsg(errDen.message, false);
+      }
     });
   }
 });

@@ -262,11 +262,12 @@ function unilab_registrar_cpt_taxonomias_fallback() {
             ),
             'public'       => true,
             'has_archive'  => true,
-            'supports'     => array( 'title', 'editor', 'author', 'custom-fields' ),
+            'supports'     => array( 'title', 'editor', 'author', 'comments', 'custom-fields' ),
             'show_in_rest' => true,
             'menu_icon'    => 'dashicons-welcome-learn-more'
         ) );
     }
+    add_post_type_support( 'questao', 'comments' );
 
     // Garante que a taxonomia disciplina exista
     if ( ! taxonomy_exists( 'disciplina' ) ) {
@@ -936,6 +937,11 @@ function unilab_processar_denuncia() {
                 'key'   => 'id_usuario_denunciante',
                 'value' => $user_atual->ID,
             ),
+            array(
+                'relation' => 'OR',
+                array( 'key' => '_tipo_denuncia', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_tipo_denuncia', 'value' => 'questao' ),
+            ),
         ),
     ) );
 
@@ -986,12 +992,36 @@ function unilab_ajax_moderar_denuncia() {
         wp_send_json_error( array( 'mensagem' => 'Denúncia não encontrada no banco de dados.' ), 404 );
     }
 
-    $admin_user = wp_get_current_user();
-    $mod_nome   = $admin_user->display_name ?: $admin_user->user_login;
-    $data_agora = current_time( 'mysql' );
-    $id_questao = intval( get_post_meta( $denuncia_id, 'id_questao', true ) );
+    $admin_user    = wp_get_current_user();
+    $mod_nome      = $admin_user->display_name ?: $admin_user->user_login;
+    $data_agora    = current_time( 'mysql' );
+    $id_questao    = intval( get_post_meta( $denuncia_id, 'id_questao', true ) );
+    $tipo_denuncia = get_post_meta( $denuncia_id, '_tipo_denuncia', true ) ?: 'questao';
+    $id_comentario = intval( get_post_meta( $denuncia_id, 'id_comentario', true ) );
 
-    if ( $acao_moderacao === 'excluir_questao' ) {
+    if ( $acao_moderacao === 'excluir_comentario' || ( $acao_moderacao === 'excluir_questao' && $tipo_denuncia === 'comentario' ) ) {
+        if ( $id_comentario > 0 ) {
+            unilab_arquivar_denuncias_comentario( $id_comentario, 'acolhida', $admin_user );
+            if ( get_comment( $id_comentario ) ) {
+                wp_delete_comment( $id_comentario, true );
+            }
+        }
+        update_post_meta( $denuncia_id, '_status_moderacao', 'acolhida' );
+        update_post_meta( $denuncia_id, '_moderador_id', $admin_user->ID );
+        update_post_meta( $denuncia_id, '_moderador_nome', $mod_nome );
+        update_post_meta( $denuncia_id, '_data_decisao', $data_agora );
+        wp_update_post( array( 'ID' => $denuncia_id, 'post_status' => 'private' ) );
+
+        wp_send_json_success( array(
+            'mensagem'      => 'Denúncia acolhida e comentário excluído permanentemente.',
+            'status'        => 'acolhida',
+            'tipo'          => 'comentario',
+            'comentario_id' => $id_comentario,
+            'questao_id'    => $id_questao,
+            'moderador'     => $mod_nome,
+            'data'          => $data_agora,
+        ) );
+    } elseif ( $acao_moderacao === 'excluir_questao' ) {
         if ( $id_questao > 0 ) {
             unilab_limpar_referencias_questao( $id_questao, 'acolhida', $admin_user );
             if ( get_post_type( $id_questao ) === 'questao' ) {
@@ -1008,6 +1038,7 @@ function unilab_ajax_moderar_denuncia() {
         wp_send_json_success( array(
             'mensagem'   => 'Denúncia acolhida e questão excluída permanentemente do banco.',
             'status'     => 'acolhida',
+            'tipo'       => 'questao',
             'questao_id' => $id_questao,
             'moderador'  => $mod_nome,
             'data'       => $data_agora,
@@ -1020,11 +1051,13 @@ function unilab_ajax_moderar_denuncia() {
         wp_update_post( array( 'ID' => $denuncia_id, 'post_status' => 'private' ) );
 
         wp_send_json_success( array(
-            'mensagem'   => 'Denúncia rejeitada e arquivada. A questão permanece publicada.',
-            'status'     => 'rejeitada',
-            'questao_id' => $id_questao,
-            'moderador'  => $mod_nome,
-            'data'       => $data_agora,
+            'mensagem'      => $tipo_denuncia === 'comentario' ? 'Denúncia rejeitada e arquivada. O comentário permanece publicado.' : 'Denúncia rejeitada e arquivada. A questão permanece publicada.',
+            'status'        => 'rejeitada',
+            'tipo'          => $tipo_denuncia,
+            'comentario_id' => $id_comentario,
+            'questao_id'    => $id_questao,
+            'moderador'     => $mod_nome,
+            'data'          => $data_agora,
         ) );
     }
 
@@ -1202,4 +1235,268 @@ function unilab_garantir_pagina_perfil() {
         update_post_meta( $pagina_perfil->ID, '_wp_page_template', 'template-perfil.php' );
     }
     update_option( 'unilab_page_perfil_v1', 1 );
+}
+
+// ==============================================================================
+// 9. MÓDULO COMPLETO DE COMENTÁRIOS (RF37, RF38, RF39, RF40, RF43, RN02, RN06)
+// ==============================================================================
+add_filter( 'comments_open', function( $open, $post_id ) {
+    if ( get_post_type( $post_id ) === 'questao' ) {
+        return true;
+    }
+    return $open;
+}, 10, 2 );
+
+function unilab_arquivar_denuncias_comentario( $comentario_id, $status_moderacao = 'acolhida', $moderador = null ) {
+    $comentario_id = intval( $comentario_id );
+    if ( $comentario_id <= 0 ) {
+        return;
+    }
+    $admin_user = $moderador instanceof WP_User ? $moderador : wp_get_current_user();
+    $mod_id     = $admin_user && $admin_user->ID ? $admin_user->ID : 0;
+    $mod_nome   = $admin_user && $admin_user->ID ? ( $admin_user->display_name ?: $admin_user->user_login ) : 'Sistema';
+    $data_agora = current_time( 'mysql' );
+
+    $denuncias_com = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
+        'meta_key'       => 'id_comentario',
+        'meta_value'     => $comentario_id,
+        'fields'         => 'ids',
+    ) );
+    foreach ( $denuncias_com as $did ) {
+        update_post_meta( $did, '_status_moderacao', $status_moderacao );
+        update_post_meta( $did, '_moderador_id', $mod_id );
+        update_post_meta( $did, '_moderador_nome', $mod_nome );
+        update_post_meta( $did, '_data_decisao', $data_agora );
+        wp_update_post( array( 'ID' => $did, 'post_status' => 'private' ) );
+    }
+}
+
+add_action( 'delete_comment', function( $comment_id ) {
+    unilab_arquivar_denuncias_comentario( $comment_id, 'comentario_excluido_sistema' );
+} );
+add_action( 'trash_comment', function( $comment_id ) {
+    unilab_arquivar_denuncias_comentario( $comment_id, 'comentario_excluido_sistema' );
+} );
+
+// 9.1 Publicar comentário ou resposta (RF37 / RF38 / HU28 / HU29)
+add_action( 'wp_ajax_unilab_publicar_comentario', 'unilab_ajax_publicar_comentario' );
+function unilab_ajax_publicar_comentario() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'mensagem' => 'Faça login para comentar.' ), 401 );
+    }
+    if ( ! check_ajax_referer( 'unilab_comentario_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido. Recarregue a página.' ), 403 );
+    }
+
+    $questao_id = isset( $_POST['questao_id'] ) ? intval( $_POST['questao_id'] ) : 0;
+    $parent_id  = isset( $_POST['parent_id'] ) ? intval( $_POST['parent_id'] ) : 0;
+    $conteudo   = isset( $_POST['conteudo'] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST['conteudo'] ) ) ) : '';
+
+    if ( $questao_id <= 0 || get_post_type( $questao_id ) !== 'questao' || get_post_status( $questao_id ) !== 'publish' ) {
+        wp_send_json_error( array( 'mensagem' => 'Questão não encontrada.' ), 404 );
+    }
+    if ( mb_strlen( $conteudo ) < 2 || mb_strlen( $conteudo ) > 2000 ) {
+        wp_send_json_error( array( 'mensagem' => 'O comentário deve ter entre 2 e 2.000 caracteres.' ), 400 );
+    }
+
+    if ( $parent_id > 0 ) {
+        $parent_c = get_comment( $parent_id );
+        if ( ! $parent_c || intval( $parent_c->comment_post_ID ) !== $questao_id ) {
+            wp_send_json_error( array( 'mensagem' => 'Comentário pai inválido para resposta.' ), 400 );
+        }
+        // Mantém profundidade máxima de 1 nível de resposta para clareza visual
+        if ( intval( $parent_c->comment_parent ) > 0 ) {
+            $parent_id = intval( $parent_c->comment_parent );
+        }
+    }
+
+    $user = wp_get_current_user();
+    $nome_autor = $user->display_name ?: $user->user_login;
+
+    $cid = wp_insert_comment( array(
+        'comment_post_ID'      => $questao_id,
+        'comment_parent'       => $parent_id,
+        'user_id'              => $user->ID,
+        'comment_author'       => $nome_autor,
+        'comment_author_email' => $user->user_email,
+        'comment_content'      => $conteudo,
+        'comment_approved'     => 1,
+        'comment_type'         => 'comment',
+    ) );
+
+    if ( ! $cid ) {
+        wp_send_json_error( array( 'mensagem' => 'Erro ao publicar comentário no banco de dados.' ), 500 );
+    }
+
+    $c_obj = get_comment( $cid );
+    wp_send_json_success( array(
+        'mensagem'   => $parent_id > 0 ? 'Resposta publicada com sucesso!' : 'Comentário publicado com sucesso!',
+        'comentario' => array(
+            'id'        => intval( $cid ),
+            'parent_id' => intval( $parent_id ),
+            'autor'     => $nome_autor,
+            'data'      => wp_date( 'd/m/Y H:i', strtotime( $c_obj->comment_date ) ),
+            'conteudo'  => $conteudo,
+            'eh_autor'  => true,
+        ),
+    ) );
+}
+
+// 9.2 Editar próprio comentário (RF39 / HU30 / RN02)
+add_action( 'wp_ajax_unilab_editar_comentario', 'unilab_ajax_editar_comentario' );
+function unilab_ajax_editar_comentario() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'mensagem' => 'Faça login para editar comentários.' ), 401 );
+    }
+    if ( ! check_ajax_referer( 'unilab_comentario_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido.' ), 403 );
+    }
+
+    $comentario_id = isset( $_POST['comentario_id'] ) ? intval( $_POST['comentario_id'] ) : 0;
+    $conteudo      = isset( $_POST['conteudo'] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST['conteudo'] ) ) ) : '';
+    $comment       = $comentario_id > 0 ? get_comment( $comentario_id ) : null;
+
+    if ( ! $comment || get_post_type( $comment->comment_post_ID ) !== 'questao' ) {
+        wp_send_json_error( array( 'mensagem' => 'Comentário não encontrado.' ), 404 );
+    }
+    if ( intval( $comment->user_id ) !== get_current_user_id() ) {
+        wp_send_json_error( array( 'mensagem' => 'Acesso negado: apenas o autor pode editar este comentário (RN02).' ), 403 );
+    }
+    if ( mb_strlen( $conteudo ) < 2 || mb_strlen( $conteudo ) > 2000 ) {
+        wp_send_json_error( array( 'mensagem' => 'O comentário deve ter entre 2 e 2.000 caracteres.' ), 400 );
+    }
+
+    $ok = wp_update_comment( array(
+        'comment_ID'      => $comentario_id,
+        'comment_content' => $conteudo,
+    ) );
+    if ( is_wp_error( $ok ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Erro ao atualizar comentário.' ), 500 );
+    }
+
+    $editado_em = current_time( 'd/m/Y H:i' );
+    update_comment_meta( $comentario_id, '_unilab_editado_em', $editado_em );
+
+    wp_send_json_success( array(
+        'mensagem'   => 'Comentário atualizado com sucesso!',
+        'id'         => $comentario_id,
+        'conteudo'   => $conteudo,
+        'editado_em' => $editado_em,
+    ) );
+}
+
+// 9.3 Excluir próprio comentário (RF40 / HU31 / RN02 / RN06)
+add_action( 'wp_ajax_unilab_excluir_comentario', 'unilab_ajax_excluir_comentario' );
+function unilab_ajax_excluir_comentario() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'mensagem' => 'Faça login para excluir comentários.' ), 401 );
+    }
+    if ( ! check_ajax_referer( 'unilab_comentario_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido.' ), 403 );
+    }
+
+    $comentario_id = isset( $_POST['comentario_id'] ) ? intval( $_POST['comentario_id'] ) : 0;
+    $comment       = $comentario_id > 0 ? get_comment( $comentario_id ) : null;
+
+    if ( ! $comment || get_post_type( $comment->comment_post_ID ) !== 'questao' ) {
+        wp_send_json_error( array( 'mensagem' => 'Comentário não encontrado.' ), 404 );
+    }
+    if ( intval( $comment->user_id ) !== get_current_user_id() ) {
+        wp_send_json_error( array( 'mensagem' => 'Acesso negado: apenas o autor pode excluir este comentário (RN02).' ), 403 );
+    }
+
+    // Remove também eventuais respostas diretas para não deixar órfãos
+    $respostas = get_comments( array(
+        'parent' => $comentario_id,
+        'status' => 'all',
+        'fields' => 'ids',
+    ) );
+    foreach ( $respostas as $rid ) {
+        unilab_arquivar_denuncias_comentario( $rid, 'comentario_excluido_autor' );
+        wp_delete_comment( $rid, true );
+    }
+
+    unilab_arquivar_denuncias_comentario( $comentario_id, 'comentario_excluido_autor' );
+    $deletado = wp_delete_comment( $comentario_id, true );
+    if ( ! $deletado ) {
+        wp_send_json_error( array( 'mensagem' => 'Não foi possível excluir o comentário.' ), 500 );
+    }
+
+    wp_send_json_success( array(
+        'mensagem'      => 'Comentário excluído permanentemente.',
+        'comentario_id' => $comentario_id,
+    ) );
+}
+
+// 9.4 Denunciar comentário para moderação (RF43 / HU34)
+add_action( 'wp_ajax_unilab_denunciar_comentario', 'unilab_ajax_denunciar_comentario' );
+function unilab_ajax_denunciar_comentario() {
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( array( 'mensagem' => 'Faça login para denunciar um comentário.' ), 401 );
+    }
+    if ( ! check_ajax_referer( 'unilab_comentario_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido.' ), 403 );
+    }
+
+    $comentario_id = isset( $_POST['comentario_id'] ) ? intval( $_POST['comentario_id'] ) : 0;
+    $motivo        = isset( $_POST['motivo'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['motivo'] ) ) ) : '';
+    $detalhes      = isset( $_POST['detalhes'] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST['detalhes'] ) ) ) : '';
+    $comment       = $comentario_id > 0 ? get_comment( $comentario_id ) : null;
+
+    if ( ! $comment || get_post_type( $comment->comment_post_ID ) !== 'questao' || get_post_status( $comment->comment_post_ID ) !== 'publish' ) {
+        wp_send_json_error( array( 'mensagem' => 'Comentário não encontrado.' ), 404 );
+    }
+    if ( empty( $motivo ) || empty( $detalhes ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Informe o motivo e a justificativa da denúncia.' ), 400 );
+    }
+
+    $user_atual = wp_get_current_user();
+    $ja_denunciou = get_posts( array(
+        'post_type'      => 'denuncia',
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'meta_query'     => array(
+            'relation' => 'AND',
+            array( 'key' => 'id_comentario', 'value' => $comentario_id ),
+            array( 'key' => 'id_usuario_denunciante', 'value' => $user_atual->ID ),
+        ),
+    ) );
+    if ( ! empty( $ja_denunciou ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Você já enviou uma denúncia pendente para este comentário.' ), 409 );
+    }
+
+    $questao_id = intval( $comment->comment_post_ID );
+    $prioridade = ( $motivo === 'Conteúdo ofensivo' || $motivo === 'Informação perigosa' ) ? 'Alta' : 'Média';
+    $aluno_nome = $user_atual->display_name ?: $user_atual->user_login;
+
+    $denuncia_id = wp_insert_post( array(
+        'post_type'   => 'denuncia',
+        'post_title'  => 'Denúncia - Comentário #' . $comentario_id . ' (' . $motivo . ')',
+        'post_status' => 'publish',
+    ) );
+
+    if ( ! $denuncia_id || is_wp_error( $denuncia_id ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Erro ao registrar denúncia.' ), 500 );
+    }
+
+    update_post_meta( $denuncia_id, '_tipo_denuncia', 'comentario' );
+    update_post_meta( $denuncia_id, 'id_comentario', $comentario_id );
+    update_post_meta( $denuncia_id, 'id_questao', $questao_id );
+    update_post_meta( $denuncia_id, 'motivo', $motivo );
+    update_post_meta( $denuncia_id, 'detalhes', $detalhes );
+    update_post_meta( $denuncia_id, 'aluno_denunciante', $aluno_nome );
+    update_post_meta( $denuncia_id, 'id_usuario_denunciante', $user_atual->ID );
+    update_post_meta( $denuncia_id, 'prioridade', $prioridade );
+    update_post_meta( $denuncia_id, '_status_moderacao', 'pendente' );
+    update_post_meta( $denuncia_id, '_comentario_texto_snapshot', wp_trim_words( $comment->comment_content, 20, '...' ) );
+    update_post_meta( $denuncia_id, '_comentario_autor_snapshot', $comment->comment_author );
+
+    wp_send_json_success( array(
+        'mensagem'    => 'Denúncia de comentário enviada para a moderação com sucesso!',
+        'denuncia_id' => $denuncia_id,
+    ) );
 }

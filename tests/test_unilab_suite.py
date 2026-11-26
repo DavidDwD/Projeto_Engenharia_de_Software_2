@@ -563,6 +563,118 @@ def main():
     }, allow_redirects=True)
     print_sub("Conta excluída não consegue mais autenticar (RNF08)", "incorretos" in r_relog.text.lower())
 
+    # -------------------------------------------------------------
+    # 18. Módulo Completo de Comentários e Moderação de Comentários (RF37–RF40, RF43, RN02, RN06)
+    # -------------------------------------------------------------
+    print_step("18. Módulo Completo de Comentários e Denúncia de Comentário (RF37–RF40, RF43)")
+    resp_q2_com = sessao_autor.get(url_q2)
+    com_nonce_m = re.search(r'COM_NONCE\s*=\s*"([^"]+)"', resp_q2_com.text)
+    com_nonce_aut = com_nonce_m.group(1) if com_nonce_m else ""
+    print_sub("Nonce de comentários presente na página da questão", bool(com_nonce_aut))
+
+    r_c1 = sessao_autor.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_publicar_comentario",
+        "nonce": com_nonce_aut,
+        "questao_id": id_q2,
+        "parent_id": 0,
+        "conteudo": "Excelente questão sobre testes unitários!",
+    }).json()
+    cid1 = r_c1.get("data", {}).get("comentario", {}).get("id", 0)
+    print_sub("Publicação de comentário raiz via AJAX funciona (RF37)", r_c1.get("success") is True and cid1 > 0)
+
+    # Outro estudante lê nonce e responde ao comentário (RF38)
+    resp_q2_out = sessao_outro.get(url_q2)
+    com_nonce_out = re.search(r'COM_NONCE\s*=\s*"([^"]+)"', resp_q2_out.text).group(1)
+    r_c_resp = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_publicar_comentario",
+        "nonce": com_nonce_out,
+        "questao_id": id_q2,
+        "parent_id": cid1,
+        "conteudo": "Concordo, a explicação também ficou muito clara.",
+    }).json()
+    cid_resp = r_c_resp.get("data", {}).get("comentario", {}).get("id", 0)
+    print_sub("Resposta a comentário existente funciona (RF38)", r_c_resp.get("success") is True and cid_resp > 0)
+
+    # Outro estudante não pode editar nem excluir comentário alheio (RN02)
+    r_c_edit_forb = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_editar_comentario",
+        "nonce": com_nonce_out,
+        "comentario_id": cid1,
+        "conteudo": "Tentativa indevida",
+    })
+    print_sub("Outro aluno é bloqueado (403) ao tentar editar comentário alheio (RN02)", r_c_edit_forb.status_code == 403)
+
+    r_c_del_forb = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_excluir_comentario",
+        "nonce": com_nonce_out,
+        "comentario_id": cid1,
+    })
+    print_sub("Outro aluno é bloqueado (403) ao tentar excluir comentário alheio (RN02)", r_c_del_forb.status_code == 403)
+
+    # Autor edita próprio comentário e verifica persistência (RF39)
+    r_c_edit_ok = sessao_autor.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_editar_comentario",
+        "nonce": com_nonce_aut,
+        "comentario_id": cid1,
+        "conteudo": "Excelente questão sobre testes unitários [EDITADO]!",
+    }).json()
+    resp_q2_pos_ed = sessao_autor.get(url_q2)
+    print_sub("Autor edita próprio comentário e alteração persiste na questão (RF39)",
+              r_c_edit_ok.get("success") is True and "testes unitários [EDITADO]!" in resp_q2_pos_ed.text)
+
+    # Outro estudante denuncia resposta/comentário e cria denúncia para moderação (RF43)
+    r_c_den = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_denunciar_comentario",
+        "nonce": com_nonce_out,
+        "comentario_id": cid1,
+        "motivo": "Conteúdo ofensivo",
+        "detalhes": "Teste automatizado de denúncia de comentário.",
+    }).json()
+    print_sub("Estudante envia denúncia de comentário com sucesso (RF43)", r_c_den.get("success") is True)
+
+    r_c_den_dup = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_denunciar_comentario",
+        "nonce": com_nonce_out,
+        "comentario_id": cid1,
+        "motivo": "Conteúdo ofensivo",
+        "detalhes": "Duplicada",
+    })
+    print_sub("Denúncia duplicada pendente do mesmo comentário é bloqueada (409)", r_c_den_dup.status_code == 409)
+
+    resp_adm_com = sessao_admin.get(f"{BASE_URL}/central-de-moderacao/")
+    print_sub("Central de moderação exibe denúncia com tag Comentário (RF43/RF44)", "Comentário" in resp_adm_com.text and f"#C-{cid1}" in resp_adm_com.text)
+
+    # Admin acolhe e exclui comentário denunciado sem excluir a questão
+    dn_com_id = str(r_c_den.get("data", {}).get("denuncia_id", ""))
+    nonce_adm_com = re.search(r'MOD_NONCE\s*=\s*"([^"]+)"', resp_adm_com.text).group(1)
+    r_adm_del_com = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_moderar_denuncia",
+        "nonce": nonce_adm_com,
+        "denuncia_id": dn_com_id,
+        "acao_moderacao": "excluir_comentario",
+    }).json()
+    resp_q2_pos_mod = sessao_autor.get(url_q2)
+    print_sub("Moderação exclui apenas o comentário denunciado e mantém a questão publicada (RF43/RF45)",
+              r_adm_del_com.get("success") is True and "testes unitários [EDITADO]!" not in resp_q2_pos_mod.text and resp_q2_pos_mod.status_code == 200)
+
+    # Outro estudante cria comentário próprio e exclui via RF40
+    r_c_own = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_publicar_comentario",
+        "nonce": com_nonce_out,
+        "questao_id": id_q2,
+        "parent_id": 0,
+        "conteudo": "Comentário temporário para exclusão do autor.",
+    }).json()
+    cid_own = r_c_own.get("data", {}).get("comentario", {}).get("id", 0)
+    r_c_own_del = sessao_outro.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_excluir_comentario",
+        "nonce": com_nonce_out,
+        "comentario_id": cid_own,
+    }).json()
+    resp_q2_pos_own_del = sessao_autor.get(url_q2)
+    print_sub("Autor exclui próprio comentário e ele some da página (RF40)",
+              r_c_own_del.get("success") is True and "Comentário temporário para exclusão" not in resp_q2_pos_own_del.text)
+
     # Limpeza final: exclui a questão de teste 2
     if id_q2 > 0 and url_q2:
         form_del2 = soup_view2.find("form", id="form-excluir-questao") or soup_view2.find("input", attrs={"name": "unilab_nonce"})
