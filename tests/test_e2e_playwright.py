@@ -64,8 +64,18 @@ def make_temp_files():
     return pdf_path, img1, img2
 
 
+allow_expected_409 = False
+
+
 def attach_listeners(page):
-    page.on("console", lambda msg: console_errors.append(f"{page.url}: {msg.text}") if msg.type == "error" else None)
+    def on_console(msg):
+        if msg.type != "error":
+            return
+        if allow_expected_409 and "409 (Conflict)" in msg.text:
+            return
+        console_errors.append(f"{page.url}: {msg.text}")
+
+    page.on("console", on_console)
     page.on("pageerror", lambda err: page_errors.append(f"{page.url}: {err}"))
 
 
@@ -499,11 +509,14 @@ def main():
         cat_criada_ok = cat_e2e_nome in page.locator("#tbCat").inner_text()
 
         # Testa trava de exclusão em categoria com questões vinculadas (Engenharia de Software)
+        global allow_expected_409
         eng_del_btn = page.locator("#tbCat tr:has-text('Engenharia de Software') button[data-del-cat]").first
         if eng_del_btn.count() > 0:
+            allow_expected_409 = True
             eng_del_btn.click()
             page.click("#confirmDel")
             page.wait_for_timeout(500)
+            allow_expected_409 = False
             trava_cat_ok = "Não é possível excluir" in page.locator("#toast").inner_text()
         else:
             trava_cat_ok = True

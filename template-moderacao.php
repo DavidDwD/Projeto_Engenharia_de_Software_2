@@ -154,6 +154,7 @@ $usuario_atual   = wp_get_current_user();
 <style>
 :root{--bg:#f4f5f7;--surface:#fff;--ink:#14161c;--muted:#667085;--line:#e4e7ec;--side:#15181f;--side-ink:#aeb4c0;--blue:#2563eb;--blue-bg:#e8f0fe;--red:#dc2a1e;--red-bg:#fdeceb;--amber:#c2410c;--amber-bg:#fff1e6;--green:#12a150;--shadow:0 1px 2px rgba(16,24,40,.06)}
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;min-height:100%}
 button{font:inherit;color:inherit;cursor:pointer}
