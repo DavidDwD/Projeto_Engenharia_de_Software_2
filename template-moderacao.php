@@ -136,11 +136,13 @@ foreach ( $posts_historico as $h ) {
     );
 }
 
-$dados_json     = wp_json_encode( $items_reais, JSON_UNESCAPED_UNICODE );
-$historico_json = wp_json_encode( $historico_reais, JSON_UNESCAPED_UNICODE );
-$ajax_url       = admin_url( 'admin-ajax.php' );
-$mod_nonce      = wp_create_nonce( 'unilab_moderacao_action' );
-$usuario_atual  = wp_get_current_user();
+$dados_json      = wp_json_encode( $items_reais, JSON_UNESCAPED_UNICODE );
+$historico_json  = wp_json_encode( $historico_reais, JSON_UNESCAPED_UNICODE );
+$categorias_init = function_exists( 'unilab_listar_categorias_payload' ) ? unilab_listar_categorias_payload() : array();
+$atributos_init  = function_exists( 'unilab_get_atributos_personalizados' ) ? unilab_get_atributos_personalizados() : array();
+$ajax_url        = admin_url( 'admin-ajax.php' );
+$mod_nonce       = wp_create_nonce( 'unilab_moderacao_action' );
+$usuario_atual   = wp_get_current_user();
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -268,6 +270,7 @@ td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
   .post,.just{max-width:none}
   .qa{flex-direction:row;flex-wrap:wrap}
   .qa .btn{flex:1}
+  #formCategoriaAdmin,#formAtributoAdmin{grid-template-columns:1fr !important}
 }
 </style>
 </head>
@@ -277,6 +280,9 @@ td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
   <div class="grp">OPERAÇÃO</div>
   <button type="button" class="nav on" id="tabPendentes"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Fila de denúncias<span class="n" id="navN">0</span></button>
   <button type="button" class="nav" id="tabHistorico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>Histórico<span class="n" id="histN" style="background:#374151;">0</span></button>
+  <div class="grp">CLASSIFICAÇÃO</div>
+  <button type="button" class="nav" id="tabCategorias"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Categorias<span class="n" id="catN" style="background:#374151;">0</span></button>
+  <button type="button" class="nav" id="tabAtributos"><svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/></svg>Atributos<span class="n" id="attrN" style="background:#374151;">0</span></button>
   <a href="<?php echo admin_url('edit.php?post_type=questao'); ?>" class="nav" style="text-decoration:none;"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v12h14V8M10 12h4"/></svg>Gerenciar Questões</a>
   <a href="<?php echo esc_url( home_url('/') ); ?>" class="nav" style="text-decoration:none;"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Ver Página Home</a>
   <a href="<?php echo esc_url( wp_logout_url( home_url('/log-in/') ) ); ?>" class="nav" id="btnSairModeracao" style="text-decoration:none;color:#fca5a5;"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sair da Conta</a>
@@ -346,6 +352,98 @@ td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top}
         <div class="empty" id="emptyHist" hidden>Nenhuma denúncia foi decidida ainda.</div>
       </div>
     </div>
+
+    <!-- Aba Categorias & Subcategorias (HU38 / RN06) -->
+    <div id="secCategorias" hidden>
+      <div class="bar" style="margin-top:20px;">
+        <div>
+          <h2>Gerenciar Categorias e Disciplinas <span class="cnt" id="cntCat">0</span></h2>
+        </div>
+      </div>
+      <div class="card" style="padding:18px;margin-bottom:18px;">
+        <form id="formCategoriaAdmin" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
+          <input type="hidden" id="catEditId" value="0">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Nome da categoria/subcategoria *</label>
+            <input id="catNome" required placeholder="Ex: Inteligência Artificial" style="width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Categoria Pai (opcional)</label>
+            <select id="catParent" style="width:100%;height:34px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:#fff;">
+              <option value="0">Nenhuma (Categoria raiz)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Descrição</label>
+            <input id="catDesc" placeholder="Breve resumo..." style="width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;">
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="submit" class="btn dark" id="btnSalvarCategoria">Salvar Categoria</button>
+            <button type="button" class="btn" id="btnCancelarEdCat" hidden>Cancelar</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="scroll">
+          <table>
+            <thead><tr><th>ID</th><th>NOME / HIERARQUIA</th><th>SLUG</th><th>QUESTÕES VINCULADAS</th><th>AÇÕES</th></tr></thead>
+            <tbody id="tbCat"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba Atributos Personalizados (HU39) -->
+    <div id="secAtributos" hidden>
+      <div class="bar" style="margin-top:20px;">
+        <div>
+          <h2>Atributos Personalizados das Questões <span class="cnt" id="cntAttr">0</span></h2>
+        </div>
+      </div>
+      <div class="card" style="padding:18px;margin-bottom:18px;">
+        <form id="formAtributoAdmin" style="display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto auto;gap:10px;align-items:end;">
+          <input type="hidden" id="attrEditId" value="">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Rótulo do Campo *</label>
+            <input id="attrRotulo" required placeholder="Ex: Semestre Letivo" style="width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Tipo de Dado</label>
+            <select id="attrTipo" style="width:100%;height:34px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:#fff;">
+              <option value="texto">Texto</option>
+              <option value="numero">Número</option>
+              <option value="data">Data</option>
+              <option value="booleano">Sim / Não</option>
+              <option value="lista_opcoes">Lista de Opções</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Opções (se lista, separadas por vírgula)</label>
+            <input id="attrOpcoes" placeholder="Ex: Fácil, Médio, Difícil" style="width:100%;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Obrigatoriedade</label>
+            <select id="attrObrig" style="width:100%;height:34px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:#fff;">
+              <option value="0">Opcional</option>
+              <option value="1">Obrigatório</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="submit" class="btn dark" id="btnSalvarAtributo">Salvar Atributo</button>
+            <button type="button" class="btn" id="btnCancelarEdAttr" hidden>Cancelar</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="scroll">
+          <table>
+            <thead><tr><th>CHAVE</th><th>RÓTULO</th><th>TIPO</th><th>OBRIGATÓRIO</th><th>OPÇÕES</th><th>AÇÕES</th></tr></thead>
+            <tbody id="tbAttr"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="emptyAttr" hidden>Nenhum atributo personalizado configurado ainda.</div>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -367,6 +465,8 @@ const MOD_NONCE = <?php echo wp_json_encode( $mod_nonce ); ?>;
 const REASONS = ["Gabarito errado", "Conteúdo ofensivo", "Enunciado incompleto", "Spam ou Duplicada", "Informação perigosa"];
 let items = <?php echo $dados_json; ?>; // DENÚNCIAS PENDENTES REAIS DO WORDPRESS
 let historico = <?php echo $historico_json; ?>; // HISTÓRICO REAL DE DECISÕES
+let categoriasAdmin = <?php echo wp_json_encode( $categorias_init, JSON_UNESCAPED_UNICODE ); ?>;
+let atributosAdmin = <?php echo wp_json_encode( $atributos_init, JSON_UNESCAPED_UNICODE ); ?>;
 
 const $ = s => document.querySelector(s), P = {Alta:0, Média:1, Baixa:2};
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -448,23 +548,194 @@ async function executarModeracao(denunciaId, acao){
   return json.data;
 }
 
-$("#tabPendentes").addEventListener("click", () => {
-  $("#tabPendentes").classList.add("on");
-  $("#tabHistorico").classList.remove("on");
-  $("#secPendentes").hidden = false;
-  $("#secHistorico").hidden = true;
+function alternarAbaAdmin(aba){
+  const abas = {
+    pendentes: ["#tabPendentes", "#secPendentes"],
+    historico: ["#tabHistorico", "#secHistorico"],
+    categorias: ["#tabCategorias", "#secCategorias"],
+    atributos: ["#tabAtributos", "#secAtributos"]
+  };
+  Object.entries(abas).forEach(([k, [btnSel, secSel]]) => {
+    $(btnSel).classList.toggle("on", k === aba);
+    $(secSel).hidden = (k !== aba);
+  });
+}
+
+$("#tabPendentes").addEventListener("click", () => alternarAbaAdmin("pendentes"));
+$("#tabHistorico").addEventListener("click", () => alternarAbaAdmin("historico"));
+$("#tabCategorias").addEventListener("click", () => alternarAbaAdmin("categorias"));
+$("#tabAtributos").addEventListener("click", () => alternarAbaAdmin("atributos"));
+
+function viewCategorias(){
+  const sel = $("#catParent");
+  const curVal = sel.value || "0";
+  sel.innerHTML = `<option value="0">Nenhuma (Categoria raiz)</option>` +
+    categoriasAdmin.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join("");
+  sel.value = curVal;
+
+  $("#tbCat").innerHTML = categoriasAdmin.map(c => {
+    const labelHier = c.parent_nome ? `<span style="color:var(--muted);">${esc(c.parent_nome)} › </span><strong>${esc(c.nome)}</strong>` : `<strong>${esc(c.nome)}</strong>`;
+    return `<tr>
+      <td><span class="id">#${c.id}</span></td>
+      <td>${labelHier}${c.descricao ? `<div class="tl">${esc(c.descricao)}</div>` : ""}</td>
+      <td><code>${esc(c.slug)}</code></td>
+      <td><span class="cnt">${c.count}</span></td>
+      <td><div style="display:flex;gap:6px;">
+        <button type="button" class="btn" data-edit-cat="${c.id}">Editar</button>
+        <button type="button" class="btn red" data-del-cat="${c.id}">Excluir</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+  $("#cntCat").textContent = $("#catN").textContent = categoriasAdmin.length;
+}
+
+function viewAtributos(){
+  $("#tbAttr").innerHTML = atributosAdmin.map(a => `<tr>
+    <td><code>${esc(a.slug)}</code></td>
+    <td><strong>${esc(a.rotulo)}</strong></td>
+    <td><span class="tag">${esc(a.tipo)}</span></td>
+    <td>${a.obrigatorio ? '<span class="pill">Sim</span>' : '<span style="color:var(--muted);">Opcional</span>'}</td>
+    <td>${(a.opcoes && a.opcoes.length) ? esc(a.opcoes.join(", ")) : "—"}</td>
+    <td><div style="display:flex;gap:6px;">
+      <button type="button" class="btn" data-edit-attr="${esc(a.id)}">Editar</button>
+      <button type="button" class="btn red" data-del-attr="${esc(a.id)}">Excluir</button>
+    </div></td>
+  </tr>`).join("");
+  $("#emptyAttr").hidden = atributosAdmin.length > 0;
+  $("#cntAttr").textContent = $("#attrN").textContent = atributosAdmin.length;
+}
+
+async function postAdminClassificacao(actionName, payload){
+  const body = new URLSearchParams(Object.assign({ action: actionName, nonce: MOD_NONCE }, payload));
+  const resp = await fetch(AJAX_URL, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+    body: body.toString()
+  });
+  const json = await resp.json();
+  if(!resp.ok || !json.success){
+    throw new Error((json && json.data && json.data.mensagem) || "Erro na operação.");
+  }
+  return json.data;
+}
+
+$("#formCategoriaAdmin").addEventListener("submit", async e => {
+  e.preventDefault();
+  const idEd = parseInt($("#catEditId").value || "0", 10);
+  try {
+    const res = await postAdminClassificacao("unilab_gerenciar_categoria", {
+      operacao: idEd > 0 ? "editar" : "criar",
+      term_id: idEd,
+      nome: $("#catNome").value,
+      parent: $("#catParent").value || "0",
+      descricao: $("#catDesc").value
+    });
+    categoriasAdmin = res.categorias || [];
+    $("#catEditId").value = "0";
+    $("#catNome").value = "";
+    $("#catDesc").value = "";
+    $("#catParent").value = "0";
+    $("#btnCancelarEdCat").hidden = true;
+    viewCategorias();
+    toast(res.mensagem);
+  } catch(err) {
+    toast("Erro: " + err.message);
+  }
 });
 
-$("#tabHistorico").addEventListener("click", () => {
-  $("#tabHistorico").classList.add("on");
-  $("#tabPendentes").classList.remove("on");
-  $("#secPendentes").hidden = true;
-  $("#secHistorico").hidden = false;
+$("#btnCancelarEdCat").addEventListener("click", () => {
+  $("#catEditId").value = "0";
+  $("#catNome").value = "";
+  $("#catDesc").value = "";
+  $("#catParent").value = "0";
+  $("#btnCancelarEdCat").hidden = true;
 });
+
+$("#formAtributoAdmin").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const res = await postAdminClassificacao("unilab_gerenciar_atributo", {
+      operacao: "salvar",
+      attr_id: $("#attrEditId").value,
+      rotulo: $("#attrRotulo").value,
+      tipo: $("#attrTipo").value,
+      opcoes: $("#attrOpcoes").value,
+      obrigatorio: $("#attrObrig").value === "1" ? "1" : "0",
+      ativo: "1"
+    });
+    atributosAdmin = res.atributos || [];
+    $("#attrEditId").value = "";
+    $("#attrRotulo").value = "";
+    $("#attrOpcoes").value = "";
+    $("#attrObrig").value = "0";
+    $("#btnCancelarEdAttr").hidden = true;
+    viewAtributos();
+    toast(res.mensagem);
+  } catch(err) {
+    toast("Erro: " + err.message);
+  }
+});
+
+$("#btnCancelarEdAttr").addEventListener("click", () => {
+  $("#attrEditId").value = "";
+  $("#attrRotulo").value = "";
+  $("#attrOpcoes").value = "";
+  $("#attrObrig").value = "0";
+  $("#btnCancelarEdAttr").hidden = true;
+});
+
+let pendingCatDel = 0;
+let pendingAttrDel = "";
 
 document.addEventListener("click", async e => {
   const t = e.target.closest("button"); if(!t) return;
+  if(t.dataset.editCat){
+    const c = categoriasAdmin.find(x => x.id === +t.dataset.editCat);
+    if(c){
+      $("#catEditId").value = String(c.id);
+      $("#catNome").value = c.nome;
+      $("#catParent").value = String(c.parent || 0);
+      $("#catDesc").value = c.descricao || "";
+      $("#btnCancelarEdCat").hidden = false;
+    }
+    return;
+  }
+  if(t.dataset.delCat){
+    pending = 0;
+    pendingAttrDel = "";
+    pendingCatDel = +t.dataset.delCat;
+    $("#modalDelTitle").textContent = "Confirmar exclusão da categoria?";
+    $("#d1").textContent = "Categorias com questões vinculadas ou subcategorias serão bloqueadas automaticamente (RN06 / HU38).";
+    $("#confirmDel").textContent = "Sim, Excluir Categoria";
+    $("#ov1").classList.add("open");
+    return;
+  }
+  if(t.dataset.editAttr){
+    const a = atributosAdmin.find(x => x.id === t.dataset.editAttr);
+    if(a){
+      $("#attrEditId").value = a.id;
+      $("#attrRotulo").value = a.rotulo;
+      $("#attrTipo").value = a.tipo;
+      $("#attrOpcoes").value = (a.opcoes || []).join(", ");
+      $("#attrObrig").value = a.obrigatorio ? "1" : "0";
+      $("#btnCancelarEdAttr").hidden = false;
+    }
+    return;
+  }
+  if(t.dataset.delAttr){
+    pending = 0;
+    pendingCatDel = 0;
+    pendingAttrDel = t.dataset.delAttr;
+    $("#modalDelTitle").textContent = "Confirmar exclusão do atributo?";
+    $("#d1").textContent = "O atributo deixará de aparecer no formulário de publicação e edição de questões (HU39 / RN06).";
+    $("#confirmDel").textContent = "Sim, Excluir Atributo";
+    $("#ov1").classList.add("open");
+    return;
+  }
   if(t.dataset.del){
+    pendingCatDel = 0;
+    pendingAttrDel = "";
     pending = +t.dataset.del;
     pendingType = t.dataset.delType || "questao";
     if(pendingType === "comentario"){
@@ -500,6 +771,38 @@ document.addEventListener("click", async e => {
   } else if(t.hasAttribute("data-close")){
     $("#ov1").classList.remove("open");
   } else if(t.id === "confirmDel"){
+    if(pendingCatDel > 0){
+      t.disabled = true;
+      try {
+        const resC = await postAdminClassificacao("unilab_gerenciar_categoria", { operacao: "excluir", term_id: pendingCatDel });
+        categoriasAdmin = resC.categorias || [];
+        viewCategorias();
+        toast(resC.mensagem);
+      } catch(errC) {
+        toast("Erro: " + errC.message);
+      } finally {
+        $("#ov1").classList.remove("open");
+        pendingCatDel = 0;
+        t.disabled = false;
+      }
+      return;
+    }
+    if(pendingAttrDel){
+      t.disabled = true;
+      try {
+        const resA = await postAdminClassificacao("unilab_gerenciar_atributo", { operacao: "excluir", attr_id: pendingAttrDel });
+        atributosAdmin = resA.atributos || [];
+        viewAtributos();
+        toast(resA.mensagem);
+      } catch(errA) {
+        toast("Erro: " + errA.message);
+      } finally {
+        $("#ov1").classList.remove("open");
+        pendingAttrDel = "";
+        t.disabled = false;
+      }
+      return;
+    }
     if(!pending) return;
     t.disabled = true;
     try {
@@ -535,6 +838,8 @@ document.addEventListener("click", async e => {
 ["#q","#fp","#fm","#so"].forEach(s => $(s).addEventListener("input", view));
 view();
 viewHistorico();
+viewCategorias();
+viewAtributos();
 </script>
 </body>
 </html>

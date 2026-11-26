@@ -675,6 +675,114 @@ def main():
     print_sub("Autor exclui próprio comentário e ele some da página (RF40)",
               r_c_own_del.get("success") is True and "Comentário temporário para exclusão" not in resp_q2_pos_own_del.text)
 
+    # -------------------------------------------------------------
+    # 19. Administração de Categorias/Subcategorias (HU38) e Atributos Personalizados (HU39)
+    # -------------------------------------------------------------
+    print_step("19. Administração de Categorias (HU38) e Atributos Personalizados (HU39)")
+    r_forb_cat = sessao_autor.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria",
+        "nonce": nonce_adm_com,
+        "operacao": "criar",
+        "nome": "Invasao Categoria",
+    })
+    print_sub("Estudante comum é bloqueado (403) ao tentar criar categoria", r_forb_cat.status_code == 403)
+
+    # Admin cria categoria pai + subcategoria filha
+    nome_cat_pai = f"Computação E2E {ts_u}"
+    nome_subcat  = f"Compiladores E2E {ts_u}"
+    r_cat_pai = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria",
+        "nonce": nonce_adm_com,
+        "operacao": "criar",
+        "nome": nome_cat_pai,
+        "parent": 0,
+        "descricao": "Categoria pai de teste",
+    }).json()
+    id_cat_pai = r_cat_pai.get("data", {}).get("term_id", 0)
+    r_cat_sub = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria",
+        "nonce": nonce_adm_com,
+        "operacao": "criar",
+        "nome": nome_subcat,
+        "parent": id_cat_pai,
+        "descricao": "Subcategoria de teste",
+    }).json()
+    id_subcat = r_cat_sub.get("data", {}).get("term_id", 0)
+    slug_subcat = next((c["slug"] for c in r_cat_sub.get("data", {}).get("categorias", []) if c["id"] == id_subcat), "")
+    print_sub("Admin cria categoria pai e subcategoria filha via AJAX (HU38)", id_cat_pai > 0 and id_subcat > 0 and bool(slug_subcat))
+
+    # Admin cria atributo personalizado obrigatório (HU39)
+    r_attr_c = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_atributo",
+        "nonce": nonce_adm_com,
+        "operacao": "salvar",
+        "rotulo": "Semestre E2E",
+        "tipo": "lista_opcoes",
+        "opcoes": "2026.1, 2026.2",
+        "obrigatorio": "1",
+        "ativo": "1",
+    }).json()
+    attr_slug_e2e = r_attr_c.get("data", {}).get("attr_id", "")
+    print_sub("Admin cria atributo personalizado obrigatório (HU39)", r_attr_c.get("success") is True and bool(attr_slug_e2e))
+
+    # Formulário /cadastrar-questao/ exibe subcategoria e atributo obrigatório
+    r_form_attr = sessao_autor.get(f"{BASE_URL}/cadastrar-questao/")
+    print_sub("Formulário de questão exibe nova subcategoria e campo do atributo personalizado",
+              nome_subcat in r_form_attr.text and f'name="unilab_attr[{attr_slug_e2e}]"' in r_form_attr.text)
+
+    # Tentativa sem atributo obrigatório deve falhar
+    dados_attr_miss = dict(dados_2alt)
+    dados_attr_miss["assunto"] = f"Questão Subcategoria E2E {ts_u}"
+    dados_attr_miss["categoria"] = slug_subcat
+    r_miss_attr = sessao_autor.post(f"{BASE_URL}/cadastrar-questao/", data=dados_attr_miss, allow_redirects=True)
+    print_sub("Publicação sem atributo obrigatório é bloqueada pelo servidor (HU39/RN08)", "obrigatório" in r_miss_attr.text.lower())
+
+    # Publicação com atributo preenchido e subcategoria vinculada
+    dados_attr_ok = dict(dados_attr_miss)
+    dados_attr_ok[f"unilab_attr[{attr_slug_e2e}]"] = "2026.2"
+    r_ok_attr = sessao_autor.post(f"{BASE_URL}/cadastrar-questao/", data=dados_attr_ok, allow_redirects=True)
+    soup_attr_pub = BeautifulSoup(r_ok_attr.text, "html.parser")
+    lnk_attr_q = soup_attr_pub.find("a", string=re.compile("Ver Questão"))
+    url_q_attr = lnk_attr_q["href"] if lnk_attr_q else ""
+    r_single_attr = sessao_autor.get(url_q_attr) if url_q_attr else None
+    print_sub("Questão com subcategoria e atributo personalizado exibe valor na página (HU38/HU39)",
+              r_single_attr is not None and "Semestre E2E: 2026.2" in r_single_attr.text)
+
+    # Trava RN06/HU38: bloquear exclusão de categoria e subcategoria com questão vinculada
+    r_del_block_sub = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria",
+        "nonce": nonce_adm_com,
+        "operacao": "excluir",
+        "term_id": id_subcat,
+    })
+    r_del_block_pai = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria",
+        "nonce": nonce_adm_com,
+        "operacao": "excluir",
+        "term_id": id_cat_pai,
+    })
+    print_sub("Trava bloqueia exclusão (409) de subcategoria/pai enquanto existir questão vinculada (RN06/HU38)",
+              r_del_block_sub.status_code == 409 and r_del_block_pai.status_code == 409)
+
+    # Limpa questão da subcategoria, depois remove subcategoria, categoria pai e atributo
+    if url_q_attr and r_single_attr is not None:
+        soup_qa = BeautifulSoup(r_single_attr.text, "html.parser")
+        qid_a = int(soup_qa.find("input", attrs={"name": "questao_id"})["value"])
+        nonce_a = soup_qa.find("input", attrs={"name": "unilab_nonce"})["value"]
+        sessao_autor.post(url_q_attr, data={"unilab_acao_excluir": "1", "questao_id": qid_a, "unilab_nonce": nonce_a})
+
+    r_del_sub_ok = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria", "nonce": nonce_adm_com, "operacao": "excluir", "term_id": id_subcat
+    }).json()
+    r_del_pai_ok = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_categoria", "nonce": nonce_adm_com, "operacao": "excluir", "term_id": id_cat_pai
+    }).json()
+    r_del_attr_ok = sessao_admin.post(f"{BASE_URL}/wp-admin/admin-ajax.php", data={
+        "action": "unilab_gerenciar_atributo", "nonce": nonce_adm_com, "operacao": "excluir", "attr_id": attr_slug_e2e
+    }).json()
+    print_sub("Após desvincular questão, exclusão de subcategoria, categoria pai e atributo ocorre com sucesso",
+              r_del_sub_ok.get("success") is True and r_del_pai_ok.get("success") is True and r_del_attr_ok.get("success") is True)
+
     # Limpeza final: exclui a questão de teste 2
     if id_q2 > 0 and url_q2:
         form_del2 = soup_view2.find("form", id="form-excluir-questao") or soup_view2.find("input", attrs={"name": "unilab_nonce"})

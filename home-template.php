@@ -133,9 +133,10 @@ if ( ! empty($termo_busca) ) {
                p.post_title LIKE %s
                OR p.post_content LIKE %s
                OR (pm.meta_key IN ('assunto', 'enunciado', 'explicacao', 'nome_professor', 'categoria') AND pm.meta_value LIKE %s)
+               OR (pm.meta_key LIKE '\_unilab\_attr\_%%' AND pm.meta_value LIKE %s)
                OR (tt.taxonomy IN ('disciplina', 'categoria_disciplina', 'tag_questao') AND t.name LIKE %s)
            )",
-        $like, $like, $like, $like
+        $like, $like, $like, $like, $like
     );
     $ids_busca = array_map( 'intval', (array) $wpdb->get_col( $sql_busca ) );
     if ( isset( $args['post__in'] ) ) {

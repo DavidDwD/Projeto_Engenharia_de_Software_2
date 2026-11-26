@@ -489,6 +489,53 @@ def main():
                f"dn={den_id_del}, status_pos_exclusao={q_deleted_status}")
         page.screenshot(path=f"{SHOT_DIR}/15_moderacao_pos_exclusao.png", full_page=True)
 
+        # 13b. Administração de Categorias (HU38) e Atributos Personalizados (HU39)
+        page.click("#tabCategorias")
+        cat_e2e_nome = f"Categoria E2E {id(page) % 10000}"
+        page.fill("#catNome", cat_e2e_nome)
+        page.fill("#catDesc", "Criada via Playwright")
+        page.click("#btnSalvarCategoria")
+        page.wait_for_selector(f"#tbCat tr:has-text('{cat_e2e_nome}')")
+        cat_criada_ok = cat_e2e_nome in page.locator("#tbCat").inner_text()
+
+        # Testa trava de exclusão em categoria com questões vinculadas (Engenharia de Software)
+        eng_del_btn = page.locator("#tbCat tr:has-text('Engenharia de Software') button[data-del-cat]").first
+        if eng_del_btn.count() > 0:
+            eng_del_btn.click()
+            page.click("#confirmDel")
+            page.wait_for_timeout(500)
+            trava_cat_ok = "Não é possível excluir" in page.locator("#toast").inner_text()
+        else:
+            trava_cat_ok = True
+
+        # Exclui categoria de teste vazia
+        page.locator(f"#tbCat tr:has-text('{cat_e2e_nome}') button[data-del-cat]").first.click()
+        page.click("#confirmDel")
+        page.wait_for_timeout(500)
+        cat_excluida_ok = cat_e2e_nome not in page.locator("#tbCat").inner_text()
+        page.screenshot(path=f"{SHOT_DIR}/18_moderacao_categorias.png", full_page=True)
+
+        # Cria atributo personalizado, confere no formulário de questão e exclui ao final (HU39)
+        page.click("#tabAtributos")
+        page.fill("#attrRotulo", "Dificuldade E2E")
+        page.select_option("#attrTipo", "lista_opcoes")
+        page.fill("#attrOpcoes", "Fácil, Difícil")
+        page.click("#btnSalvarAtributo")
+        page.wait_for_selector("#tbAttr tr:has-text('Dificuldade E2E')")
+        attr_criado_ok = "Dificuldade E2E" in page.locator("#tbAttr").inner_text()
+
+        page.goto(f"{BASE_URL}/cadastrar-questao/", wait_until="networkidle")
+        attr_form_ok = page.locator("#attr_dificuldade_e2e").count() == 1
+        page.goto(f"{BASE_URL}/central-de-moderacao/", wait_until="networkidle")
+        page.click("#tabAtributos")
+        page.locator("#tbAttr tr:has-text('Dificuldade E2E') button[data-del-attr]").first.click()
+        page.click("#confirmDel")
+        page.wait_for_timeout(500)
+        attr_excluido_ok = "Dificuldade E2E" not in page.locator("#tbAttr").inner_text()
+        record("HU38/HU39/RN06", "Admin gerencia categorias/subcategorias (com trava de exclusão) e atributos dinâmicos visíveis no cadastro",
+               cat_criada_ok and trava_cat_ok and cat_excluida_ok and attr_criado_ok and attr_form_ok and attr_excluido_ok,
+               f"cat_ok={cat_criada_ok}, trava={trava_cat_ok}, attr_form={attr_form_ok}")
+
         # Verifica logoff a partir da Moderação (RF05)
         logout_via_ui(page)
         logged_out_ok = "log-in" in page.url

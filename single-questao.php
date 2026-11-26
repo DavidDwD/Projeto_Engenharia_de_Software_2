@@ -1109,6 +1109,17 @@ if ( is_user_logged_in() ) {
           <?php if ( ! empty( $nome_professor ) ) : ?>
             <span style="background:#eff6ff; color:#1e40af; padding:2px 10px; border-radius:99px; font-size:12px; font-weight:600;">Prof.: <?php echo esc_html( $nome_professor ); ?></span>
           <?php endif; ?>
+          <?php
+          if ( function_exists( 'unilab_get_atributos_personalizados' ) ) {
+              foreach ( unilab_get_atributos_personalizados() as $attr_q ) {
+                  if ( empty( $attr_q['ativo'] ) ) continue;
+                  $val_attr_q = get_post_meta( get_the_ID(), '_unilab_attr_' . $attr_q['slug'], true );
+                  if ( $val_attr_q !== '' ) : ?>
+                    <span class="badge-atributo-extra" style="background:#ecfeff; color:#0e7490; padding:2px 10px; border-radius:99px; font-size:12px; font-weight:600;"><?php echo esc_html( $attr_q['rotulo'] . ': ' . $val_attr_q ); ?></span>
+                  <?php endif;
+              }
+          }
+          ?>
           <?php if ( ! empty( $tags_questao ) && ! is_wp_error( $tags_questao ) ) : ?>
             <span style="display:inline-flex; flex-wrap:wrap; gap:6px;">
               <?php foreach ( $tags_questao as $tg ) : ?>

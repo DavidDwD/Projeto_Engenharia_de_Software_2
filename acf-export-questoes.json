@@ -271,7 +271,7 @@
         },
         "public": 1,
         "publicly_queryable": 1,
-        "hierarchical": 0,
+        "hierarchical": 1,
         "show_ui": 1,
         "show_in_menu": 1,
         "show_in_nav_menus": 1,

@@ -282,6 +282,14 @@ function unilab_registrar_cpt_taxonomias_fallback() {
         ) );
     }
 
+    // Garante suporte hierárquico mesmo se ACF registrar 'disciplina' como não-hierárquica
+    add_action( 'init', function() {
+        global $wp_taxonomies;
+        if ( isset( $wp_taxonomies['disciplina'] ) ) {
+            $wp_taxonomies['disciplina']->hierarchical = true;
+        }
+    }, 999 );
+
     // Garante que a taxonomia tag_questao exista
     if ( ! taxonomy_exists( 'tag_questao' ) ) {
         register_taxonomy( 'tag_questao', array( 'questao' ), array(
@@ -1499,4 +1507,267 @@ function unilab_ajax_denunciar_comentario() {
         'mensagem'    => 'Denúncia de comentário enviada para a moderação com sucesso!',
         'denuncia_id' => $denuncia_id,
     ) );
+}
+
+// ==============================================================================
+// 10. ADMINISTRAÇÃO DE CATEGORIAS (HU38) E ATRIBUTOS PERSONALIZADOS (HU39)
+// ==============================================================================
+
+function unilab_obter_subtermos_recursivo( $term_id ) {
+    $term_id = intval( $term_id );
+    $todos   = get_terms( array(
+        'taxonomy'   => 'disciplina',
+        'hide_empty' => false,
+    ) );
+    $filhos_por_pai = array();
+    if ( ! empty( $todos ) && ! is_wp_error( $todos ) ) {
+        foreach ( $todos as $t ) {
+            $filhos_por_pai[ intval( $t->parent ) ][] = intval( $t->term_id );
+        }
+    }
+    $coletados = array( $term_id );
+    $fila      = array( $term_id );
+    while ( ! empty( $fila ) ) {
+        $atual = array_shift( $fila );
+        foreach ( ( $filhos_por_pai[ $atual ] ?? array() ) as $fid ) {
+            if ( ! in_array( $fid, $coletados, true ) ) {
+                $coletados[] = $fid;
+                $fila[]      = $fid;
+            }
+        }
+    }
+    return $coletados;
+}
+
+function unilab_categoria_tem_questoes( $term_id ) {
+    $term_id = intval( $term_id );
+    if ( $term_id <= 0 ) {
+        return false;
+    }
+    $ids_busca = unilab_obter_subtermos_recursivo( $term_id );
+    $vinculadas = get_posts( array(
+        'post_type'      => 'questao',
+        'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+        'posts_per_page' => 1,
+        'fields'         => 'ids',
+        'tax_query'      => array(
+            array(
+                'taxonomy'         => 'disciplina',
+                'field'            => 'term_id',
+                'terms'            => $ids_busca,
+                'operator'         => 'IN',
+                'include_children' => false,
+            ),
+        ),
+    ) );
+    return ! empty( $vinculadas );
+}
+
+// Trava de segurança também no wp-admin para impedir exclusão de categoria com questões (RN06 / HU38)
+add_action( 'pre_delete_term', function( $term_id, $taxonomy ) {
+    if ( $taxonomy === 'disciplina' && unilab_categoria_tem_questoes( $term_id ) ) {
+        wp_die( 'Não é possível excluir uma categoria ou subcategoria que possui questões vinculadas (RN06 / HU38).', 'Exclusão Bloqueada', array( 'response' => 409, 'back_link' => true ) );
+    }
+}, 10, 2 );
+
+function unilab_listar_categorias_payload() {
+    $termos = get_terms( array(
+        'taxonomy'   => 'disciplina',
+        'hide_empty' => false,
+        'orderby'    => 'name',
+        'order'      => 'ASC',
+    ) );
+    $out = array();
+    if ( ! empty( $termos ) && ! is_wp_error( $termos ) ) {
+        $mapa_nomes = array();
+        foreach ( $termos as $t ) {
+            $mapa_nomes[ intval( $t->term_id ) ] = $t->name;
+        }
+        foreach ( $termos as $t ) {
+            $pid = intval( $t->parent );
+            $out[] = array(
+                'id'          => intval( $t->term_id ),
+                'nome'        => $t->name,
+                'slug'        => $t->slug,
+                'parent'      => $pid,
+                'parent_nome' => $pid > 0 && isset( $mapa_nomes[ $pid ] ) ? $mapa_nomes[ $pid ] : '',
+                'descricao'   => $t->description,
+                'count'       => intval( $t->count ),
+            );
+        }
+    }
+    return $out;
+}
+
+add_action( 'wp_ajax_unilab_gerenciar_categoria', 'unilab_ajax_gerenciar_categoria' );
+function unilab_ajax_gerenciar_categoria() {
+    if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Acesso negado.' ), 403 );
+    }
+    if ( ! check_ajax_referer( 'unilab_moderacao_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido.' ), 403 );
+    }
+
+    $op     = isset( $_POST['operacao'] ) ? sanitize_text_field( wp_unslash( $_POST['operacao'] ) ) : 'listar';
+    $term_id = isset( $_POST['term_id'] ) ? intval( $_POST['term_id'] ) : 0;
+    $nome   = isset( $_POST['nome'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['nome'] ) ) ) : '';
+    $parent = isset( $_POST['parent'] ) ? intval( $_POST['parent'] ) : 0;
+    $desc   = isset( $_POST['descricao'] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST['descricao'] ) ) ) : '';
+
+    if ( $op === 'criar' ) {
+        if ( mb_strlen( $nome ) < 2 ) {
+            wp_send_json_error( array( 'mensagem' => 'O nome da categoria deve ter pelo menos 2 caracteres.' ), 400 );
+        }
+        $res = wp_insert_term( $nome, 'disciplina', array(
+            'parent'      => $parent > 0 ? $parent : 0,
+            'description' => $desc,
+        ) );
+        if ( is_wp_error( $res ) ) {
+            wp_send_json_error( array( 'mensagem' => $res->get_error_message() ), 400 );
+        }
+        wp_send_json_success( array(
+            'mensagem'   => 'Categoria criada com sucesso!',
+            'term_id'    => intval( $res['term_id'] ),
+            'categorias' => unilab_listar_categorias_payload(),
+        ) );
+    } elseif ( $op === 'editar' ) {
+        if ( $term_id <= 0 || ! term_exists( $term_id, 'disciplina' ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Categoria não encontrada.' ), 404 );
+        }
+        if ( mb_strlen( $nome ) < 2 ) {
+            wp_send_json_error( array( 'mensagem' => 'O nome da categoria deve ter pelo menos 2 caracteres.' ), 400 );
+        }
+        if ( $parent === $term_id ) {
+            wp_send_json_error( array( 'mensagem' => 'Uma categoria não pode ser pai de si mesma.' ), 400 );
+        }
+        $res = wp_update_term( $term_id, 'disciplina', array(
+            'name'        => $nome,
+            'parent'      => $parent > 0 ? $parent : 0,
+            'description' => $desc,
+        ) );
+        if ( is_wp_error( $res ) ) {
+            wp_send_json_error( array( 'mensagem' => $res->get_error_message() ), 400 );
+        }
+        wp_send_json_success( array(
+            'mensagem'   => 'Categoria atualizada com sucesso!',
+            'term_id'    => $term_id,
+            'categorias' => unilab_listar_categorias_payload(),
+        ) );
+    } elseif ( $op === 'excluir' ) {
+        if ( $term_id <= 0 || ! term_exists( $term_id, 'disciplina' ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Categoria não encontrada.' ), 404 );
+        }
+        if ( unilab_categoria_tem_questoes( $term_id ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Não é possível excluir: há questões vinculadas a esta categoria ou suas subcategorias (RN06).' ), 409 );
+        }
+        $descendentes = array_diff( unilab_obter_subtermos_recursivo( $term_id ), array( $term_id ) );
+        if ( ! empty( $descendentes ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Remova ou mova as subcategorias antes de excluir a categoria pai.' ), 409 );
+        }
+        delete_option( 'disciplina_children' );
+        $del = wp_delete_term( $term_id, 'disciplina' );
+        if ( is_wp_error( $del ) || ! $del ) {
+            wp_send_json_error( array( 'mensagem' => 'Erro ao excluir categoria.' ), 500 );
+        }
+        wp_send_json_success( array(
+            'mensagem'   => 'Categoria excluída com sucesso.',
+            'categorias' => unilab_listar_categorias_payload(),
+        ) );
+    }
+
+    wp_send_json_success( array( 'categorias' => unilab_listar_categorias_payload() ) );
+}
+
+function unilab_get_atributos_personalizados() {
+    $attrs = get_option( 'unilab_atributos_personalizados', array() );
+    if ( ! is_array( $attrs ) ) {
+        return array();
+    }
+    return array_values( $attrs );
+}
+
+add_action( 'wp_ajax_unilab_gerenciar_atributo', 'unilab_ajax_gerenciar_atributo' );
+function unilab_ajax_gerenciar_atributo() {
+    if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Acesso negado.' ), 403 );
+    }
+    if ( ! check_ajax_referer( 'unilab_moderacao_action', 'nonce', false ) ) {
+        wp_send_json_error( array( 'mensagem' => 'Token de segurança inválido.' ), 403 );
+    }
+
+    $op      = isset( $_POST['operacao'] ) ? sanitize_text_field( wp_unslash( $_POST['operacao'] ) ) : 'listar';
+    $attrs   = unilab_get_atributos_personalizados();
+    $attr_id = isset( $_POST['attr_id'] ) ? sanitize_key( wp_unslash( $_POST['attr_id'] ) ) : '';
+
+    if ( $op === 'salvar' ) {
+        $rotulo      = isset( $_POST['rotulo'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['rotulo'] ) ) ) : '';
+        $tipo        = isset( $_POST['tipo'] ) ? sanitize_key( wp_unslash( $_POST['tipo'] ) ) : 'texto';
+        $obrigatorio = isset( $_POST['obrigatorio'] ) && $_POST['obrigatorio'] === '1';
+        $ativo       = ! isset( $_POST['ativo'] ) || $_POST['ativo'] === '1';
+        $opcoes_raw  = isset( $_POST['opcoes'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['opcoes'] ) ) ) : '';
+        $tipos_validos = array( 'texto', 'numero', 'data', 'booleano', 'lista_opcoes' );
+
+        if ( mb_strlen( $rotulo ) < 2 ) {
+            wp_send_json_error( array( 'mensagem' => 'O rótulo do atributo deve ter pelo menos 2 caracteres.' ), 400 );
+        }
+        if ( ! in_array( $tipo, $tipos_validos, true ) ) {
+            $tipo = 'texto';
+        }
+        $opcoes = array();
+        if ( $tipo === 'lista_opcoes' && ! empty( $opcoes_raw ) ) {
+            $opcoes = array_values( array_filter( array_map( 'trim', explode( ',', $opcoes_raw ) ) ) );
+        }
+        if ( $tipo === 'lista_opcoes' && empty( $opcoes ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Informe pelo menos uma opção separada por vírgula para Lista de Opções.' ), 400 );
+        }
+
+        $slug_novo = $attr_id ?: sanitize_title( $rotulo );
+        $slug_novo = str_replace( '-', '_', $slug_novo );
+        if ( empty( $slug_novo ) ) {
+            $slug_novo = 'attr_' . time();
+        }
+
+        $novo_item = array(
+            'id'          => $slug_novo,
+            'slug'        => $slug_novo,
+            'rotulo'      => $rotulo,
+            'tipo'        => $tipo,
+            'obrigatorio' => $obrigatorio,
+            'opcoes'      => $opcoes,
+            'ativo'       => $ativo,
+        );
+
+        $encontrado = false;
+        foreach ( $attrs as $idx => $it ) {
+            if ( $it['id'] === $slug_novo ) {
+                $attrs[ $idx ] = $novo_item;
+                $encontrado = true;
+                break;
+            }
+        }
+        if ( ! $encontrado ) {
+            $attrs[] = $novo_item;
+        }
+        update_option( 'unilab_atributos_personalizados', array_values( $attrs ) );
+
+        wp_send_json_success( array(
+            'mensagem'  => $encontrado ? 'Atributo atualizado com sucesso!' : 'Atributo personalizado criado com sucesso!',
+            'atributos' => array_values( $attrs ),
+            'attr_id'   => $slug_novo,
+        ) );
+    } elseif ( $op === 'excluir' ) {
+        $filtrados = array_values( array_filter( $attrs, function( $it ) use ( $attr_id ) {
+            return $it['id'] !== $attr_id;
+        } ) );
+        if ( count( $filtrados ) === count( $attrs ) ) {
+            wp_send_json_error( array( 'mensagem' => 'Atributo não encontrado.' ), 404 );
+        }
+        update_option( 'unilab_atributos_personalizados', $filtrados );
+        wp_send_json_success( array(
+            'mensagem'  => 'Atributo removido com sucesso.',
+            'atributos' => $filtrados,
+        ) );
+    }
+
+    wp_send_json_success( array( 'atributos' => $attrs ) );
 }

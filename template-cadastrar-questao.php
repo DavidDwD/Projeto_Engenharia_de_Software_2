@@ -25,6 +25,12 @@ function unilab_carregar_dados_questao_edicao( $id_edicao ) {
     $termos_tags = wp_get_post_terms( $id_edicao, 'tag_questao', array( 'fields' => 'names' ) );
     $tags_str    = ( ! empty( $termos_tags ) && ! is_wp_error( $termos_tags ) ) ? implode( ', ', $termos_tags ) : '';
 
+    $attrs_defs = function_exists( 'unilab_get_atributos_personalizados' ) ? unilab_get_atributos_personalizados() : array();
+    $attrs_vals = array();
+    foreach ( $attrs_defs as $ad ) {
+        $attrs_vals[ $ad['slug'] ] = get_post_meta( $id_edicao, '_unilab_attr_' . $ad['slug'], true );
+    }
+
     return array(
         'id'               => $id_edicao,
         'assunto'          => get_the_title( $id_edicao ),
@@ -32,6 +38,7 @@ function unilab_carregar_dados_questao_edicao( $id_edicao ) {
         'categoria'        => $disc_slug ?: get_post_meta( $id_edicao, 'categoria', true ),
         'nome_professor'   => get_post_meta( $id_edicao, 'nome_professor', true ),
         'tags_livres'      => $tags_str,
+        'atributos_extras' => $attrs_vals,
         'alternativa_a'    => get_post_meta( $id_edicao, 'alternativa_a', true ),
         'alternativa_b'    => get_post_meta( $id_edicao, 'alternativa_b', true ),
         'alternativa_c'    => get_post_meta( $id_edicao, 'alternativa_c', true ),
@@ -76,6 +83,22 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
     $link_raw       = trim( $_POST['link_externo'] ?? '' );
     $id_post_salvar = isset( $_POST['id_questao_edicao'] ) ? intval( $_POST['id_questao_edicao'] ) : 0;
 
+    $attrs_defs      = function_exists( 'unilab_get_atributos_personalizados' ) ? unilab_get_atributos_personalizados() : array();
+    $attrs_post_vals = array();
+    $erro_attr_extra = '';
+    foreach ( $attrs_defs as $ad ) {
+        if ( empty( $ad['ativo'] ) ) continue;
+        $raw_val = isset( $_POST['unilab_attr'][ $ad['slug'] ] ) ? trim( sanitize_text_field( wp_unslash( $_POST['unilab_attr'][ $ad['slug'] ] ) ) ) : '';
+        $attrs_post_vals[ $ad['slug'] ] = $raw_val;
+        if ( empty( $erro_attr_extra ) ) {
+            if ( ! empty( $ad['obrigatorio'] ) && $raw_val === '' ) {
+                $erro_attr_extra = "O campo personalizado \"{$ad['rotulo']}\" é obrigatório (HU39 / RN08).";
+            } elseif ( $raw_val !== '' && $ad['tipo'] === 'numero' && ! is_numeric( $raw_val ) ) {
+                $erro_attr_extra = "O campo \"{$ad['rotulo']}\" deve conter um valor numérico válido.";
+            }
+        }
+    }
+
     // Preservar dados preenchidos no formulário
     $dados_preenchidos = array_merge( $dados_preenchidos, array(
         'assunto'          => $assunto,
@@ -83,6 +106,7 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         'categoria'        => $categoria,
         'nome_professor'   => $nome_professor,
         'tags_livres'      => $tags_livres,
+        'atributos_extras' => $attrs_post_vals,
         'alternativa_a'    => $alt_a,
         'alternativa_b'    => $alt_b,
         'alternativa_c'    => $alt_c,
@@ -198,6 +222,8 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         $mensagem_erro = 'Selecione uma disciplina para a questão (RF15).';
     } elseif ( count( $lista_tags_limpa ) > 10 ) {
         $mensagem_erro = 'Você pode adicionar no máximo 10 tags por questão (RF16).';
+    } elseif ( ! empty( $erro_attr_extra ) ) {
+        $mensagem_erro = $erro_attr_extra;
     } elseif ( ! empty( $link_raw ) && ( ! preg_match( '#^https?://#i', $link_raw ) || ! filter_var( $link_raw, FILTER_VALIDATE_URL ) ) ) {
         $mensagem_erro = 'O link externo informado é inválido. Use um endereço web começando com http:// ou https:// (RN05).';
     } elseif ( ! empty( $erro_upload ) ) {
@@ -241,6 +267,9 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
         update_post_meta( $post_id, 'explicacao', sanitize_textarea_field( $_POST['explicacao'] ?? '' ) );
         update_post_meta( $post_id, 'link_externo', esc_url_raw( $_POST['link_externo'] ?? '' ) );
         update_post_meta( $post_id, 'nome_professor', $nome_professor );
+        foreach ( $attrs_post_vals as $attr_slug => $attr_val ) {
+            update_post_meta( $post_id, '_unilab_attr_' . $attr_slug, $attr_val );
+        }
 
         if ( ! empty( $lista_tags_limpa ) ) {
             wp_set_object_terms( $post_id, $lista_tags_limpa, 'tag_questao', false );
@@ -265,7 +294,11 @@ if ( $esta_logado && ! $permissao_negada && $_SERVER['REQUEST_METHOD'] === 'POST
             $termo_cat = get_term_by( 'slug', $cat_selecionada, 'disciplina' );
             $nome_cat  = isset( $mapa_nomes[$cat_selecionada] ) ? $mapa_nomes[$cat_selecionada] : ( $termo_cat ? $termo_cat->name : $cat_selecionada );
             update_post_meta( $post_id, 'categoria', $nome_cat );
-            wp_set_object_terms( $post_id, $nome_cat, 'disciplina', false );
+            if ( $termo_cat && ! is_wp_error( $termo_cat ) ) {
+                wp_set_object_terms( $post_id, intval( $termo_cat->term_id ), 'disciplina', false );
+            } else {
+                wp_set_object_terms( $post_id, $nome_cat, 'disciplina', false );
+            }
             if ( taxonomy_exists( 'categoria_disciplina' ) ) {
                 wp_set_object_terms( $post_id, $nome_cat, 'categoria_disciplina', false );
             }
@@ -1056,9 +1089,16 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
               );
               $discs_db = get_terms( array( 'taxonomy' => 'disciplina', 'hide_empty' => false ) );
               if ( ! empty( $discs_db ) && ! is_wp_error( $discs_db ) ) {
+                  $nomes_por_id = array();
+                  foreach ( $discs_db as $dt_idx ) {
+                      $nomes_por_id[ intval( $dt_idx->term_id ) ] = $dt_idx->name;
+                  }
                   foreach ( $discs_db as $dt ) {
+                      $label_dt = ( intval( $dt->parent ) > 0 && isset( $nomes_por_id[ intval( $dt->parent ) ] ) )
+                          ? ( $nomes_por_id[ intval( $dt->parent ) ] . ' — ' . $dt->name )
+                          : $dt->name;
                       if ( ! in_array( $dt->name, $discs_padrao, true ) && ! isset( $discs_padrao[$dt->slug] ) ) {
-                          $discs_padrao[$dt->slug] = $dt->name;
+                          $discs_padrao[$dt->slug] = $label_dt;
                       }
                   }
               }
@@ -1098,6 +1138,46 @@ if ( $id_edicao > 0 && ! $permissao_negada && empty( $mensagem_erro ) ) {
                 <div id="tags-limite-aviso" class="figma-input-hint">Separe por vírgula ou Enter. Sugestões aparecem a partir de 2 caracteres (máx. 10 tags).</div>
               </div>
             </div>
+
+            <?php
+            $atributos_ativos = array_values( array_filter(
+                function_exists( 'unilab_get_atributos_personalizados' ) ? unilab_get_atributos_personalizados() : array(),
+                function( $a ) { return ! empty( $a['ativo'] ); }
+            ) );
+            if ( ! empty( $atributos_ativos ) ) : ?>
+              <div class="figma-field-group figma-two-cols" id="bloco-atributos-personalizados">
+                <?php foreach ( $atributos_ativos as $attr ) :
+                    $a_slug = $attr['slug'];
+                    $a_val  = $dados_preenchidos['atributos_extras'][ $a_slug ] ?? '';
+                    $req_at = ! empty( $attr['obrigatorio'] ) ? 'required' : '';
+                ?>
+                  <div>
+                    <label class="figma-label" for="attr_<?php echo esc_attr( $a_slug ); ?>">
+                      <?php echo esc_html( $attr['rotulo'] ); ?>
+                      <?php if ( ! empty( $attr['obrigatorio'] ) ) : ?><span class="obrigatorio">*</span><?php endif; ?>
+                    </label>
+                    <?php if ( $attr['tipo'] === 'lista_opcoes' ) : ?>
+                      <select id="attr_<?php echo esc_attr( $a_slug ); ?>" name="unilab_attr[<?php echo esc_attr( $a_slug ); ?>]" class="figma-select" <?php echo $req_at; ?>>
+                        <option value="">Selecione...</option>
+                        <?php foreach ( (array) ( $attr['opcoes'] ?? array() ) as $opt_v ) : ?>
+                          <option value="<?php echo esc_attr( $opt_v ); ?>" <?php selected( $a_val, $opt_v ); ?>><?php echo esc_html( $opt_v ); ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    <?php elseif ( $attr['tipo'] === 'booleano' ) : ?>
+                      <select id="attr_<?php echo esc_attr( $a_slug ); ?>" name="unilab_attr[<?php echo esc_attr( $a_slug ); ?>]" class="figma-select" <?php echo $req_at; ?>>
+                        <option value="">Selecione...</option>
+                        <option value="Sim" <?php selected( $a_val, 'Sim' ); ?>>Sim</option>
+                        <option value="Não" <?php selected( $a_val, 'Não' ); ?>>Não</option>
+                      </select>
+                    <?php else :
+                        $input_type = $attr['tipo'] === 'numero' ? 'number' : ( $attr['tipo'] === 'data' ? 'date' : 'text' );
+                    ?>
+                      <input type="<?php echo esc_attr( $input_type ); ?>" id="attr_<?php echo esc_attr( $a_slug ); ?>" name="unilab_attr[<?php echo esc_attr( $a_slug ); ?>]" class="figma-input" value="<?php echo esc_attr( $a_val ); ?>" <?php echo $req_at; ?>>
+                    <?php endif; ?>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
 
             <div class="figma-field-group" style="margin-bottom: 0;">
               <label class="figma-label" for="enunciado">Enunciado Completo da Questão <span class="obrigatorio">*</span></label>
